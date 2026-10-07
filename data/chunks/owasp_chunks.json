@@ -1,0 +1,1002 @@
+[
+  {
+    "chunk_id": "LLM01_CHUNK_001",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "--- SOURCE PAGE 10 ---\nLLM01:2026 Prompt Injection\n\nDescription\nA prompt-injection vulnerability occurs when input to a large language model (LLM), whether direct user\ninput, retrieved content, tool output, image, audio, or video content, intermediate reasoning, or persistent\nmemory, alters the model's behavior in ways the application developer did not intend. LLMs make no\narchitectural distinction between \"instructions\" and \"data\" (both are tokens on the same stream), so there is\nno clean equivalent to parameterized queries (NCSC, 2025). Inputs need not be human-readable, need not\narrive directly from a user, and need not be visible in the rendered interface to influence the model.\n\nPrompt-injection vulnerabilities exist in how models process input and how that input can force the model to\npass data or instructions incorrectly to other parts of the system. Three deployment-time properties make\nthis worse. First, context-window pooling: the model treats system prompt, user input, retrieved\ndocuments, tool outputs, conversation history, and memory as a single token stream, with no enforced trust\nboundary."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_002",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "irst, context-window pooling: the model treats system prompt, user input, retrieved\ndocuments, tool outputs, conversation history, and memory as a single token stream, with no enforced trust\nboundary. Second, memory persistence: an injection that writes to long-term memory, a RAG corpus, a\nvector store, or a hosted memory service taints every subsequent session that reads from that store. Third,\nagentic execution: when the model's output drives tool calls (file system, shell, email, cloud APIs, MCP\nservers, sub-agents), the blast radius extends from the chat surface to whatever the agent's tools can reach,\nand tool outputs re-enter the context window, enabling chained or self-replicating effects.\n\nA prompt-injection anatomy can be characterized along three axes. Delivery surface is how it reaches the\nmodel (direct input, retrieved content, tool output, tool connection channel, or persistent memory).\nPropagation behavior is how it spreads across time and boundaries (single-shot, multi-step kill-chain,\ncross-session through memory or RAG, or self-replicating across agents)."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_003",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": ", or persistent memory).\nPropagation behavior is how it spreads across time and boundaries (single-shot, multi-step kill-chain,\ncross-session through memory or RAG, or self-replicating across agents). Encoding is how the malicious\ninstructions are represented in tokens or pixels (plain text, base64 or other obfuscation, invisible Unicode,\nmultimodal or steganographic, low-resource language). Decomposing a scenario along these axes is a useful\nthreat-modeling step before selecting which mitigations apply.\n\nThe severity and nature of a successful prompt injection vary with the business context the model operates\nin and the agency with which it is architected. Prompt injection can lead to outcomes that include but are not\nlimited to:\n\n • Disclosure of sensitive information, system-prompt content, retrieved private documents, or\n infrastructure details.\n • Manipulation of model output to produce biased, harmful, or attacker-chosen content that\n downstream systems or users act on.\n\nPage 10\n\n--- SOURCE PAGE 11 ---\n • Unauthorized invocation of tools the agent is permitted to call, escalating to arbitrary command\n execution and destructive actions where the agent has shell, file-system, o"
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_004",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "--- SOURCE PAGE 11 ---\n • Unauthorized invocation of tools the agent is permitted to call, escalating to arbitrary command\n execution and destructive actions where the agent has shell, file-system, or cloud-API access.\n • Data exfiltration via image-URL channels, hidden Unicode characters in rendered output, or covert\n tool-logging side channels.\n • Persistent compromise of agent behavior across sessions through memory or RAG corpus\n poisoning.\n\nNote: prompt injection differs from LLM02:2026 Sensitive Information Disclosure, which addresses what the\nmodel leaks through its outputs, including reasoning-channel content, and from LLM03:2026 Excessive\nAgency, which addresses the consequences of model output reaching privileged actions. This entry concerns\nthe input boundary itself. Sanitization and validation of model outputs before they reach downstream\ncomponents is covered by LLM10:2026 Improper Output Handling.\n\nTypes of Prompt Injection\nDirect Prompt Injection\n\nA user, or an attacker with the user's access path, supplies input that changes model behavior in undesired\nways."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_005",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "M10:2026 Improper Output Handling.\n\nTypes of Prompt Injection\nDirect Prompt Injection\n\nA user, or an attacker with the user's access path, supplies input that changes model behavior in undesired\nways. Direct injection can be intentional (a malicious user crafting a jailbreak) or unintentional (a legitimate\nuser pasting content that happens to contain conflicting instructions, or a user who relies on an LLM to help\nthem and inadvertently optimizes their input against an unrelated downstream LLM, as in Scenario #3).\n\nJailbreaking is the subset of prompt injection where the attacker's goal is to make the model violate its\nsafety protocols. Application-level safeguards help contain it, but effective prevention requires ongoing\nupdates to the model's training and safety mechanisms.\n\nIndirect Prompt Injection\n\nThe model ingests content from an external source (a web page, a document, an email, a tool response, a\nretrieved RAG passage, an image, an MCP server's output, a database row, or an issue title) that contains\ndata which acts as prompt injection. The user did not supply or see those instructions."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_006",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "nse, a\nretrieved RAG passage, an image, an MCP server's output, a database row, or an issue title) that contains\ndata which acts as prompt injection. The user did not supply or see those instructions. The trust profile of\nthe delivery surface determines what defenses are practical:\n\n • Untrusted surfaces. Public web pages, emails from unknown senders, search results. Defenders\n must treat anything from these sources as suspicious. Most prompt-injection research has focused\n here.\n • Semi-trusted surfaces. Issue titles in a public bug tracker, package READMEs and changelogs,\n third-party API responses: content the user chose to retrieve but did not author. The user trusts the\n platform but not necessarily individual contributors.\n\nPage 11\n\n--- SOURCE PAGE 12 ---\n • Trusted surfaces. The developer's own repositories, databases, internal documents, and mail. The\n developer may not realize an attacker has placed content here, perhaps via an unrelated upstream\n vector such as a public bug-report form.\n\nThe shared structure: the attacker does not need to compromise the backend directly."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_007",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "e an attacker has placed content here, perhaps via an unrelated upstream\n vector such as a public bug-report form.\n\nThe shared structure: the attacker does not need to compromise the backend directly. They place text\nwhere the developer's LLM will read it, and the LLM, operating with the developer's privileges, does the work.\nDefenses that focus only on the chat surface miss this entirely.\n\nIndirect prompt injection increasingly turns the user's own LLM instance into the weapon against the user's\nown backend. The pattern: an attacker submits text into a trusted-by-the-user location through a low-\nprivilege channel (a public form, a customer ticket, a community pull request) and waits for the user's MCP-\nconnected agent or developer assistant to read that text while operating under the user's elevated\ncredentials. The agent, not the attacker, performs the privileged action (see Common Example #3; Scenario\n#9 walks through the production proof-of-concepts).\n\nCommon Examples of Risk\n 1. Direct prompt-input override: a user message overrides the system prompt's role and capability\n limits, making the model disclose, generate, or act outside its intended scope."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_008",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "mon Examples of Risk\n 1. Direct prompt-input override: a user message overrides the system prompt's role and capability\n limits, making the model disclose, generate, or act outside its intended scope. Intentional and\n unintentional inputs both count.\n\n 2. Indirect injection through retrieved content: attacker instructions ride in a RAG passage, web\n page, document, or email and run when the content reaches the context window (for example,\n EmailGPT; INCIBE-CERT, 2024).\n\n 3. Trusted-surface indirect injection: text planted in a low-privilege but trusted channel (issue\n tracker, feedback form, support ticket) makes the user's LLM act under its own elevated credentials,\n exfiltrating repositories, dumping databases, or modifying IDE config, actions the attacker could not\n perform directly (Invariant Labs, 2025; General Analysis, 2025; Rehberger, 2025a).\n\n 4. Multimodal and steganographic injection: sub-perceptual perturbations in images, audio, or video\n are extracted by the encoder (Clusmann et al., 2025; see Scenario #6).\n\n 5."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_009",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "5; Rehberger, 2025a).\n\n 4. Multimodal and steganographic injection: sub-perceptual perturbations in images, audio, or video\n are extracted by the encoder (Clusmann et al., 2025; see Scenario #6).\n\n 5. Invisible-character injection and exfiltration: tag-block, variation-selector, and zero-width\n Unicode carry instructions or exfiltrate bytes inside benign-looking text. The August 2024 M365\n Copilot ASCII-smuggling proof of concept exfiltrated a Slack MFA code (Rehberger, 2024).\n\n 6. Cross-session memory and RAG corpus poisoning: one tainted entry in persistent memory or a\n RAG corpus reaches every future session that reads it (W. Zou et al., 2025; see Scenario #4).\n\nPage 12\n\n--- SOURCE PAGE 13 ---\n 7. Fine-tuning interface as gradient oracle (\"fun-tuning\"): an attacker reads per-example loss from a\n vendor's fine-tuning API to optimize a payload (65% to 82% attack success on Gemini), bringing\n white-box-style optimization to closed-weight models (Labunets et al., 2025).\n\n 8."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_010",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "-example loss from a\n vendor's fine-tuning API to optimize a payload (65% to 82% attack success on Gemini), bringing\n white-box-style optimization to closed-weight models (Labunets et al., 2025).\n\n 8. Multilingual, encoded, or low-resource-language payloads: low-resource and code-mixed inputs\n raise attack success and evade classifiers not trained on the scheme, and Base64, ROT13, or emoji\n encodings bypass filters that never saw the encoding (Hackett et al., 2025).\n\nPrevention and Mitigation Strategies\nPrompt injection is intrinsic to current generative AI: LLMs make no architectural distinction between\ninstructions and data, and their behavior is stochastic, so no reliable prevention mechanism exists today, a\nposition consistent with NIST (2025), NCSC (2025), and Debenedetti et al. (2025). Defense is therefore\narchitectural rather than interceptive."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_011",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "stic, so no reliable prevention mechanism exists today, a\nposition consistent with NIST (2025), NCSC (2025), and Debenedetti et al. (2025). Defense is therefore\narchitectural rather than interceptive. Design the surrounding system on the explicit assumption that the\nmodel's instruction boundary will eventually be bypassed, and constrain what the model is permitted to do,\nand what its outputs are permitted to reach, so a successful injection does not translate into a successful\nexploit.\n\nMost high-impact prompt-injection incidents on record became severe because the injection landed inside a\nsystem whose tools, scopes, or output-rendering capabilities let the compromised model act on the\nattacker's behalf at the user's privilege level (see Scenarios #7 through #9). This is the operational\nrelationship between this entry and LLM03:2026 Excessive Agency: prompt injection is the input-side\ncompromise, and excessive functionality, permissions, or autonomy are what give that compromise\nconsequences outside the chat window."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_012",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "nd LLM03:2026 Excessive Agency: prompt injection is the input-side\ncompromise, and excessive functionality, permissions, or autonomy are what give that compromise\nconsequences outside the chat window. Simon Willison's \"lethal trifecta\" (2025) restates the same structural\ndiagnosis as a pre-deployment check: an agent that can simultaneously access private data, ingest\nuntrusted content, and communicate externally has the conditions for high-impact exploitation, and\nremoving any one leg removes them.\n\nApply the controls below as defense-in-depth, since no single control is sufficient. Some reduce injection\nsuccess and are expected to degrade against adaptive attackers. Others bound the blast radius once\ninjection succeeds, and these are what survive against attackers who can probe the system. For agentic\ndeployments, the least-privilege and capability-budgeting controls (#4, #8) are load-bearing, and\nLLM03:2026 carries the full agency-side treatment.\n\n 1. Constrain the model's role and capabilities in the system prompt. Use declarative allow and deny\n statements (\"assist with X only, do not access Y, do not forward output to external addresses\"), not\n open-ended grants."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_013",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "l's role and capabilities in the system prompt. Use declarative allow and deny\n statements (\"assist with X only, do not access Y, do not forward output to external addresses\"), not\n open-ended grants. This is a partial control only: an attacker who infers the prompt can bypass it\n (Nasr et al., 2025), so pair it with the privilege controls in #4.\n\nPage 13\n\n--- SOURCE PAGE 14 ---\n 2. Define a strict output schema and validate every response in trusted application code before any\n downstream system acts on it, using structural validation rather than a second LLM call. This\n catches format violations, not semantic manipulation: a schema-valid response can still carry a\n malicious SQL query or an exfiltration-formatted email body.\n\n 3. Filter at every modality boundary (text, image, audio, structured data), not just text. Run\n modality-specific classifiers, OCR over images, and transcription over audio, then apply text filters\n to the extracted content. Semantic filters are evadable by rephrasing or encoding, and low-resource\n and code-mixed inputs degrade their accuracy (Hackett et al., 2025).\n\n 4."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_014",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "then apply text filters\n to the extracted content. Semantic filters are evadable by rephrasing or encoding, and low-resource\n and code-mixed inputs degrade their accuracy (Hackett et al., 2025).\n\n 4. Hold credentials and state-change capability in application code, not the model, and grant least\n privilege per operation. Route privileged calls through a deterministic policy engine that re-\n validates intent and arguments at execution time. NIST AI 100-2 E2025 and the CISA and Five Eyes\n OT joint guidance (CISA et al., 2025) frame this deterministic mediation as a baseline procurement\n expectation. Broad \"convenience\" permissions and multi-agent hops re-introduce the risk\n downstream.\n\n 5. Strip tag-block (U+E0000 to E007F), variation-selector (U+FE00 to FE0F), and zero-width\n (U+200B, U+200C, U+200D, U+2060) characters at every ingest and render boundary. These are\n invisible in normal rendering and smuggle instructions or exfiltration bytes (see Common Example\n #5), and variation-selector variants (Rehberger, 2025c) smuggle arbitrary bytes invisibly. Stripping\n does not stop visible-text payloads or future steganographic classes.\n\n 6."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_015",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "es (see Common Example\n #5), and variation-selector variants (Rehberger, 2025c) smuggle arbitrary bytes invisibly. Stripping\n does not stop visible-text payloads or future steganographic classes.\n\n 6. Pass external content through a structurally separate, provenance-labeled channel so the model\n can distinguish data from instructions (S. Chen et al., 2025; Microsoft Research, 2025). This reduces\n attack success in non-adaptive tests only: an attacker who knows the marking scheme can mimic it,\n and StruQ was bypassed under adaptive attack (Nasr et al., 2025).\n\n 7. Require explicit human confirmation before any privileged, irreversible, or externally visible\n action, surfacing the exact rendered action rather than a summary to the reviewer. Invisible-\n character smuggling can make the displayed action differ from the executed one (#5), and approval\n fatigue degrades reviewer judgment at volume.\n\n 8. Budget agent capabilities with the Rule of Two as a floor (Meta AI, 2025)."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_016",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "make the displayed action differ from the executed one (#5), and approval\n fatigue degrades reviewer judgment at volume.\n\n 8. Budget agent capabilities with the Rule of Two as a floor (Meta AI, 2025). Treat simultaneous\n access to (A) untrusted input, (B) sensitive data, and (C) state change or external communication as\n high-risk: any [A,B,C] agent needs per-action human approval, and [A,B] or [A,C] configurations\n need an explicit residual-risk assessment (see Scenario #8). NIST AI 100-2 E2025 and the CISA, FBI,\n NSA, and ACSC OT guidance (CISA et al., 2025) endorse the rule, which is silent on autonomy depth\n (Noma Security, 2025).\n\n 9. Treat agent memory writes as privileged operations. Log the causing prompt, classify writes for\n instruction or role-modification content, and require approval before instruction-bearing memories\n persist across sessions. A February 2025 Gemini PoC (Rehberger, 2025b) poisoned memory via\n\nPage 14\n\n--- SOURCE PAGE 15 ---\n delayed tool invocation (MITRE, n.d.). Factual entries shade into instructions, and incremental writes\n can evade per-write classification.\n\n 10."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_017",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "poisoned memory via\n\nPage 14\n\n--- SOURCE PAGE 15 ---\n delayed tool invocation (MITRE, n.d.). Factual entries shade into instructions, and incremental writes\n can evade per-write classification.\n\n 10. Pin, sign, and verify every MCP server and third-party tool package, audit tool descriptions for\n hidden instructions, and monitor tool composition. Treat these as a software supply-chain surface,\n covered by LLM04:2026 Supply Chain for third-party tool packages and by ASI04 Agentic Supply\n Chain Vulnerabilities for MCP servers and tool registries (see Scenario #9). Pinning does not stop a\n payload shipped in the pinned version or tool-description poisoning that leaves the version\n unchanged.\n\n 11. Test against adaptive attackers who have read the deployed defense, and reject static-only\n attack-success claims. Baseline with AgentDojo (Debenedetti et al., 2024) and JailbreakBench\n (Chao et al., 2024), then red-team with the full defense specification disclosed to the testers. Nasr\n et al."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_018",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "ack-success claims. Baseline with AgentDojo (Debenedetti et al., 2024) and JailbreakBench\n (Chao et al., 2024), then red-team with the full defense specification disclosed to the testers. Nasr\n et al. (2025) found static attack success near zero while adaptive attack success exceeded 90% for\n most of 12 recent defenses (see also LLMail-Inject, Microsoft Security Response Center, 2025).\n\nExample Attack Scenarios\nScenario #1: Direct Injection\nAn attacker prompts a customer-support chatbot to ignore its guidelines, query private data stores, and\nsend emails, leading to unauthorized access and privilege escalation. Anatomy: (a) direct user input, (b)\nsingle-shot, (c) plain text\n\nScenario #2: Indirect Injection via Retrieved Web Content\nA user asks an assistant to summarize a web page containing hidden instructions. The model inserts a\nmarkdown image whose URL exfiltrates the private conversation to an attacker-controlled domain. The user\nsees only the rendered image, never the instruction."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_019",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "g hidden instructions. The model inserts a\nmarkdown image whose URL exfiltrates the private conversation to an attacker-controlled domain. The user\nsees only the rendered image, never the instruction. Anatomy: (a) retrieved web content (indirect), (b)\nsingle-shot with image-URL exfiltration, (c) plain text hidden in page source\n\nScenario #3: Unintentional Injection\nA job-description PDF embeds an AI-detection instruction. An applicant unknowingly uses an LLM to\noptimize their resume against it, the model surfaces the instruction, and the recruiting system flags the\ncandidate, a prompt injection with neither party acting maliciously. Anatomy: (a) indirect (document / PDF),\n(b) single-shot, (c) plain text\n\nScenario #4: RAG Repository Poisoning\nAn attacker contributes poisoned documents to a corpus the application retrieves over. A matching query\nreturns the modified content, and its instructions alter the output. As few as five poisoned documents have\n\nPage 15\n\n--- SOURCE PAGE 16 ---\nreached roughly 90% attack success against a knowledge base of millions of texts (W."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_020",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "ent, and its instructions alter the output. As few as five poisoned documents have\n\nPage 15\n\n--- SOURCE PAGE 16 ---\nreached roughly 90% attack success against a knowledge base of millions of texts (W. Zou et al., 2025).\nAnatomy: (a) retrieved content (RAG corpus), (b) cross-session / cross-user, (c) plain text\n\nScenario #5: Payload Splitting\nAn attacker splits malicious instructions across multiple resume fields (header, body, attachment) so no\nsingle field looks malicious to a per-field classifier. The LLM recombines them at evaluation, and its\nrecommendation is manipulated. Anatomy: (a) direct user input split across fields, (b) single-shot\nrecombined at evaluation, (c) plain text fragmented\n\nScenario #6: Multimodal Steganographic Injection\nAn attacker embeds an instruction in an image below the human visual threshold. A multimodal model's\nvision encoder extracts the payload, behavior changes, and the model produces harmful output or an\nunauthorized tool invocation. This was demonstrated against four frontier vision-language models in\noncology imaging (Clusmann et al., 2025) and against general-purpose models via combined visual\nperturbation and text steering (R."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_021",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "This was demonstrated against four frontier vision-language models in\noncology imaging (Clusmann et al., 2025) and against general-purpose models via combined visual\nperturbation and text steering (R. Chen et al., 2025). Anatomy: (a) image input (indirect / multimodal), (b)\nsingle-shot, (c) steganographic / pixel-level encoding\n\nScenario #7: Zero-Click Document-Borne Agentic Exfiltration\nA crafted email triggers an LLM-powered productivity assistant to exfiltrate organizational data with no user\ninteraction. Aim Security demonstrated this against Microsoft 365 Copilot (Reddy & Gujral, 2025), bypassing\nboth the deployed prompt-injection classifier and the link-redaction filter. Anatomy: (a) email / document\n(indirect), (b) single-shot with tool invocation, (c) plain text with invisible-Unicode exfiltration channel\n\nScenario #8: Agentic Destructive Command Execution\nTwo July 2025 events show the same class of impact via different vectors. An attacker committed a\ndestructive system prompt to the Amazon Q VS Code extension repository before AWS reverted it, though\nthe committed code failed to execute due to a syntax error (Amazon Web Services, 2025a)."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_022",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "mmitted a\ndestructive system prompt to the Amazon Q VS Code extension repository before AWS reverted it, though\nthe committed code failed to execute due to a syntax error (Amazon Web Services, 2025a). Separately, a\nruntime injection caused Amazon Q to execute arbitrary code (Amazon Web Services, 2025b). An agent with\nshell, file-system, or cloud-API access amplifies an injection into a host-impacting incident. Anatomy: (a)\nsupply-chain / compromised system prompt, or runtime indirect injection, (b) persistent cross-session, or\nsingle-shot with shell tool execution, (c) plain text\n\nScenario #9: Trusted-Backend Indirect Injection through MCP\nAn attacker plants text in a low-privilege channel (a public GitHub issue, a support ticket, or a malicious npm\npackage), and the developer's LLM reads it under elevated credentials."
+  },
+  {
+    "chunk_id": "LLM01_CHUNK_023",
+    "document_id": "LLM01",
+    "topic": "Prompt Injection",
+    "source": "OWASP",
+    "source_document": "LLM01_prompt_injection.txt",
+    "text": "ction through MCP\nAn attacker plants text in a low-privilege channel (a public GitHub issue, a support ticket, or a malicious npm\npackage), and the developer's LLM reads it under elevated credentials. Invariant Labs (2025) exfiltrated\nprivate repositories via a poisoned GitHub issue, General Analysis (2025) dumped a production database\nthrough Cursor's Supabase MCP server running service_role and bypassing row-level security, and the\nmalicious postmark-mcp package (Koi Security, 2025; Toulas, 2025) BCC'd email to an attacker across an\n\nPage 16\n\n--- SOURCE PAGE 17 ---\nestimated 300 organizations. Anatomy: (a) trusted-surface indirect (MCP channel: issue, ticket, npm\npackage), (b) multi-step tool-chain, (c) plain text\n\nPage 17"
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_001",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "--- SOURCE PAGE 18 ---\nLLM02:2026 Sensitive\nInformation Disclosure\n\nDescription\nSensitive information disclosure occurs when an LLM-integrated system exposes confidential, regulated,\nprivileged, or proprietary data through a channel the data subject, controller, or system owner did not\nauthorize. The channel is not only the final answer: tool-call arguments, reasoning traces, retrieved chunks,\nmultimodal output, logs, telemetry, embeddings, and observable inference properties (timing, token length,\nlog-probabilities, confidence, cache-hit behavior) are all disclosure surfaces. Treat each as an output\nsubject to the same classification and redaction rules.\n\nDisclosure arises across four phases of the LLM lifecycle:\n\n 1. Training-time. A model, fine-tune, or LoRA adapter memorizes corpus content and later reproduces\n it verbatim or in recoverable form. Memorization scales log-linearly with capacity, duplication, and\n context length. Narrow adapters memorize rare examples with high fidelity, a targeted extraction\n surface distinct from the base model.\n\n 2. Inference-time."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_002",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "g-linearly with capacity, duplication, and\n context length. Narrow adapters memorize rare examples with high fidelity, a targeted extraction\n surface distinct from the base model.\n\n 2. Inference-time. The model discloses live context (system prompt, RAG chunks, files, tool outputs,\n memory, or another session's data), often because summarization, translation, or extraction\n surfaces more than was asked, including visually-redacted spans.\n\n 3. Pipeline-time. Fine-tuning, distillation, synthetic-data generation, gradients, SDKs, and\n observability move sensitive data into derived artifacts.\n\n 4. Observation-time. Adversaries infer facts from externally measurable properties (token length\n under TLS, latency, log-probabilities, confidence, cache-hit signals) without receiving content.\n\nProtected information includes PII, PHI, financial data, credentials, API keys, trade secrets, model weights,\nprivileged communications, classified or export-controlled material, and biometric and genomic identifiers.\nTwo structural failures drive most incidents."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_003",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "tials, API keys, trade secrets, model weights,\nprivileged communications, classified or export-controlled material, and biometric and genomic identifiers.\nTwo structural failures drive most incidents. First, oversharing upstream: unscoped drives, legacy\npermissions, and knowledge bases feed RAG with sensitive data the model then retrieves as designed. The\nfix is the data surface, not the model (DSGAI01). Second, persistence: once data influences weights,\nembeddings, or adapters it stays extractable after source deletion, straining GDPR Article 17 and CCPA\n§1798.105 erasure obligations. Open-weights deployments cannot rely on rate limits, since extraction,\nmembership inference, and inversion run offline at unbounded rates.\n\nPage 18\n\n--- SOURCE PAGE 19 ---\nSeverity should turn on what the recipient can learn, not on whether the leak looked like natural language.\nApplicable regimes include the EU AI Act (Regulation (EU) 2024/1689, high-risk obligations from August\n2026), GDPR, HIPAA, CCPA/CPRA, ISO/IEC 42001, and NIST AI 600-1. This entry covers the LLM as an\napplication component."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_004",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "lude the EU AI Act (Regulation (EU) 2024/1689, high-risk obligations from August\n2026), GDPR, HIPAA, CCPA/CPRA, ISO/IEC 42001, and NIST AI 600-1. This entry covers the LLM as an\napplication component. Where it acts as an autonomous actor (cross-session memory, tool choice, multi-\nstep exfiltration), amplified risk is owned by ASI, with deeper controls in DSGAI.\n\nCommon Examples of Risk\n 1. Training-data memorization and extraction. The November 2023 \"poem\" divergence attack drove\n gpt-3.5-turbo to emit more than 10,000 unique memorized examples for roughly USD 200 (Nasr\n et al., 2023). Vendor patches have been bypassed repeatedly. Fine-tuned models and their LoRA\n adapters are more extractable than base models of the same scale, a targeted extraction surface\n distinct from the base model. Litigation exhibits in NYT v. OpenAI and Getty v. Stability AI include\n examples of verbatim reproduction, with the Getty case centered on watermark reproduction.\n\n 2. Inference-time context and output disclosure. The March 2023 ChatGPT Redis bug exposed\n payment PII for 1.2% of Plus subscribers."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_005",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "oduction, with the Getty case centered on watermark reproduction.\n\n 2. Inference-time context and output disclosure. The March 2023 ChatGPT Redis bug exposed\n payment PII for 1.2% of Plus subscribers. More than 4,500 shared conversations were indexed by\n Google in 2025 through missing noindex directives. Clinical-embedding vector stores sit in HIPAA\n audit-control scope that most teams have not operationalized, and retrieval-layer authorization is\n widely under-implemented. Treat reasoning traces and tool arguments as outputs, not debugging\n leftovers. The trace channel also enables reasoning-trace-coercion model extraction. Regex and\n blocklist filters fall to cross-lingual, base64, and hex encodings. Aggregation across individually-\n permitted sources (budget + hiring + diligence → a pending M&A target) is a disclosure when policy\n prohibits the synthesized conclusion.\n\n 3. Embedding and representation disclosure. Modern inversion reconstructs plaintext from leaked or\n exported vectors, so an \"embeddings-only\" backup is a source-document breach. Cosine similarity\n does not respect ACLs."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_006",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "presentation disclosure. Modern inversion reconstructs plaintext from leaked or\n exported vectors, so an \"embeddings-only\" backup is a source-document breach. Cosine similarity\n does not respect ACLs. Authorize before retrieval, because post-generation filtering cannot undo a\n chunk already supplied to the model. Mechanisms are owned by LLM09:2026 and DSGAI13. This\n entry owns the regulatory consequence.\n\n 4. Multimodal disclosure. Vision models OCR credentials and PII from screenshots, notifications, and\n PDF metadata. Generators reproduce watermarks and identifiable faces (the Getty / Stable Diffusion\n watermark case is canonical). Cross-modal transformation (text rendered as image, image OCR'd to\n text) bypasses single-modality DLP.\n\n 5. Inference-time side channels. SPV-MIA raised membership-inference AUC to 0.9 against fine-\n tuned targets (Fu et al., 2024), enough for a regulatory breach determination about a named\n individual. Whisper Leak (McDonald & Bar Or, 2025) classified conversation topics at greater than\n 98% AUPRC across 28 production models from encrypted traffic. Weiss et al."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_007",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "termination about a named\n individual. Whisper Leak (McDonald & Bar Or, 2025) classified conversation topics at greater than\n 98% AUPRC across 28 production models from encrypted traffic. Weiss et al. (2024) reconstructed\n 29% of response content and inferred topic for 55% via token length. Wu et al. (2025) demonstrated\n prompt leakage through KV-cache sharing in multi-tenant serving. Dong et al. (2025) inverted a\n\nPage 19\n\n--- SOURCE PAGE 20 ---\n 4,112-token medical prompt from a middle layer at an F1 of 0.8688 (token matching). Carlini et al.\n (2024) recovered a production model's projection layer through a logit-bias channel.\n\n 6. Training-pipeline disclosure. Gradient inversion by a malicious server (Boenisch et al., 2021),\n distillation, and synthetic-data carryover move examples into derived models. Iterative query\n attacks against a DP-protected model refine LLM-generated queries and home in on confidence\n spikes to re-identify individuals, so fixed-epsilon DP is necessary but not sufficient without rate-\n limiting, query-pattern detection, and per-user budgets.\n\n 7. Platform and ecosystem disclosure."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_008",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "spikes to re-identify individuals, so fixed-epsilon DP is necessary but not sufficient without rate-\n limiting, query-pattern detection, and per-user budgets.\n\n 7. Platform and ecosystem disclosure. Observability platforms (Langfuse, LangSmith, Datadog LLM\n Observability) log full prompts, completions, chunks, and traces by default. Two representative\n incidents: DeepSeek's January 2025 ClickHouse exposure of more than one million rows of logs and\n API keys (Wiz, 2025), and Check Point's 2026 disclosure of ChatGPT exfiltration through a hidden\n outbound channel in the code-execution runtime, where one crafted prompt turned the runtime into\n a silent DNS channel while the visible answer stayed benign (Check Point Research, 2026).\n\nPrevention and Mitigation Strategies\nMitigations follow the DSGAI tiered structure for a graduated implementation path.\n\nTier 1: Foundational (every deployment)\n 1. Govern corpora: provenance, classification, and deduplication across near-duplicates,\n transliterations, and format variants. Scrub PII at ingest. Deduplication reduces but does not\n eliminate memorization.\n 2. Minimize context: send only task-required fields to external providers."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_009",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "es,\n transliterations, and format variants. Scrub PII at ingest. Deduplication reduces but does not\n eliminate memorization.\n 2. Minimize context: send only task-required fields to external providers. Disable auto-context\n (customer_360, full-record append) unless justified per template.\n 3. Authorize before retrieval: enforce document- and chunk-level authorization inside the index query,\n not at the application layer after retrieval. Isolate per-tenant indexes for high-sensitivity workloads.\n 4. System-prompt hygiene: never store secrets, credentials, or regulated data in system prompts.\n 5. Sanitize with classifiers, not regex alone: pattern matching plus NER plus trained classifiers,\n because regex fails on encoded and cross-lingual output.\n 6. Budget queries per user and per session on sensitive endpoints to disrupt enumeration and\n membership probing.\n 7. Operational hygiene: restrict and scrub logs and traces before APM ingestion, encrypt in transit and\n at rest, and technically enforce no-train/no-retain rather than policy text alone.\n\nTier 2: Hardening (regulated / high-sensitivity)\n 1."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_010",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "b logs and traces before APM ingestion, encrypt in transit and\n at rest, and technically enforce no-train/no-retain rather than policy text alone.\n\nTier 2: Hardening (regulated / high-sensitivity)\n 1. DP-SGD calibrated to sensitivity and cardinality with overfitting monitored as a memorization proxy.\n Pair with detection, because fixed budgets degrade under adaptive querying.\n\nPage 20\n\n--- SOURCE PAGE 21 ---\n 2. Vector-store protection: encryption, ACLs separate from document ACLs, restricted export APIs,\n minimum-scope k-NN, and embedding-space probing detection.\n 3. Gate log-probabilities, confidence, and explanations on production endpoints.\n 4. Classify and redact reasoning traces as first-class output. Never log raw traces to unrestricted\n observability.\n 5. Side-channel defenses: random padding and token batching for streaming, segregation of high-\n sensitivity tenants on dedicated prefix caches, and partitioned KV caches under co-tenancy.\n 6. Format-preserving encryption for structured identifiers, with strict internal-versus-external routing\n separation and field allowlists on the external path.\n 7."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_011",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "itioned KV caches under co-tenancy.\n 6. Format-preserving encryption for structured identifiers, with strict internal-versus-external routing\n separation and field allowlists on the external path.\n 7. AI-aware audit logging into SIEM, continuous DLP and AI-SPM, and a documented domain inventory\n with an enforced join policy so individually-permitted sources cannot combine into prohibited\n conclusions.\n\nTier 3: Advanced (regulated, classified, high-target)\n 1. Confidential computing (Intel TDX, AMD SEV-SNP, AWS Nitro Enclaves) or emerging privacy-\n preserving inference (the AloePri covariant-obfuscation framework, Lin et al., 2026) where the\n threat model justifies the utility and latency cost.\n 2. Verifiable erasure across raw data, embeddings, checkpoints, and adapters, validated by post-\n unlearning extraction and membership-inference probes.\n 3. Disclosure red-teaming as a release gate: extraction, membership inference, embedding inversion,\n internal-state inversion, side channels, and LoRA extractability, measured quantitatively and aligned\n to MITRE ATLAS.\n 4. Audit synthetic data against extractors. Resist distillation with probing detection, rate limits, and\n watermarking."
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_012",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": ", and LoRA extractability, measured quantitatively and aligned\n to MITRE ATLAS.\n 4. Audit synthetic data against extractors. Resist distillation with probing detection, rate limits, and\n watermarking. Budget aggregate analytics.\n 5. Exercise a disclosure incident-response playbook: scope by data class and affected subject or\n session, then assess and meet applicable breach and serious-incident notification obligations\n across relevant regimes (for example GDPR, HIPAA, and EU AI Act Article 73). Follow with unlearning,\n retraining, or withdrawal, vector and cache cleanup, vendor notice, and a persistent-memory audit.\n\nExample Attack Scenarios\nScenario #1\nDivergence prompts make a production model emit memorized PII, URLs, and live credentials at scale,\ntriggering GDPR Article 33 notification.\n\nScenario #2\nA shared-inference-state defect leaks one user's medical-letter prompt into another user's reasoning trace.\nHIPAA 60-day notification applies.\n\nPage 21\n\n--- SOURCE PAGE 22 ---\nScenario #3\nExtended-thinking traces logged verbatim to a shared APM project expose retrieved PII to hundreds of\nengineers while the answer stays sanitized.\n\nScenario #4\nPrompt injection makes a support bot p"
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_013",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "#3\nExtended-thinking traces logged verbatim to a shared APM project expose retrieved PII to hundreds of\nengineers while the answer stays sanitized.\n\nScenario #4\nPrompt injection makes a support bot print its system prompt and an embedded vendor API key.\n\nScenario #5\nA shared legal RAG index crosses firm boundaries, synthesizing one client's privileged strategy into another's\nanswer, an attorney-client waiver event.\n\nScenario #6\nA leaked \"embeddings-only\" vector backup is reclassified as a source-document breach after inversion,\nrestarting the 72-hour clock.\n\nScenario #7\nWhisper Leak topic inference on encrypted streaming identifies users querying medical, legal, or political\ntopics without decryption.\n\nScenario #8\nMembership inference against a clinical fine-tune identifies training-set patients at high AUC without\nextracting any record, a HIPAA-reportable determination.\n\nScenario #9\nA model summarizes PII hidden beneath a black-rectangle PDF redaction layer rendered over unmodified\ntext.\n\nScenario #10\nAn injected \"diagnostic check\" makes a code runtime encode spreadsheet content into DNS queries while\nthe visible statistical summary stays benign.\n\nPage 22"
+  },
+  {
+    "chunk_id": "LLM02_CHUNK_014",
+    "document_id": "LLM02",
+    "topic": "Sensitive Information Disclosure",
+    "source": "OWASP",
+    "source_document": "LLM02_sensitive_information_disclosure.txt",
+    "text": "ext.\n\nScenario #10\nAn injected \"diagnostic check\" makes a code runtime encode spreadsheet content into DNS queries while\nthe visible statistical summary stays benign.\n\nPage 22"
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_001",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "--- SOURCE PAGE 23 ---\nLLM03:2026 Excessive Agency\n\nDescription\nAn LLM-based system is often granted a degree of agency by its developer: the ability to call functions or\ninterface with other systems via tools (also called extensions, plugins, or skills by different vendors) to\nundertake actions in response to a prompt. An LLM agent may also select which tool to invoke dynamically,\nbased on the input prompt or prior LLM output. Agent-based systems will typically make repeated calls to an\nLLM using output from previous invocations to ground and direct subsequent invocations.\n\nExcessive Agency is the vulnerability that enables damaging actions to be performed in response to\nunexpected, ambiguous or manipulated outputs from an LLM, regardless of what is causing the LLM to\nmalfunction."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_002",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "Agency is the vulnerability that enables damaging actions to be performed in response to\nunexpected, ambiguous or manipulated outputs from an LLM, regardless of what is causing the LLM to\nmalfunction. Common triggers include:\n • hallucination/confabulation caused by poorly-engineered benign prompts, or just a poorly-\n performing/misaligned model,\n • direct/indirect prompt injection from a malicious user, an earlier invocation of a\n malicious/compromised tool, or (in multi-agent/collaborative systems) a malicious/compromised\n peer agent.\n\nThe root cause of Excessive Agency is typically one or more of:\n • excessive functionality,\n • excessive permissions,\n • excessive autonomy.\n\nExcessive Agency can lead to a broad range of impacts across the confidentiality, integrity and availability\nspectrum, and is dependent on which systems an LLM-based app is able to interact with. Within the context\nof agentic systems, Excessive Agency can manifest as ASI02: Tool Misuse & Exploitation, ASI03: Identity &\nPrivilege Abuse and ASI08: Cascading Failures.\n\nNote: Excessive Agency differs from Improper Output Handling which is concerned with insufficient scrutiny\nof LLM outputs."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_003",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "ploitation, ASI03: Identity &\nPrivilege Abuse and ASI08: Cascading Failures.\n\nNote: Excessive Agency differs from Improper Output Handling which is concerned with insufficient scrutiny\nof LLM outputs. Sanitization of model inputs and outputs is not a root control for Excessive Agency and is\ncovered by LLM01:2026 Prompt Injection for inputs and LLM10:2026 Improper Output Handling for outputs.\n\nPage 23\n\n--- SOURCE PAGE 24 ---\nCommon Examples of Risk\n1. Excessive Functionality\nAn LLM agent has access to tools which include functions that are not needed for the intended operation of\nthe system. For example, a developer needs to grant an LLM agent the ability to read documents from a\nrepository, but the third-party tool they choose to use also includes the ability to modify and delete\ndocuments.\n\n2. Excessive Functionality\nA tool may have been trialed during a development phase and dropped in favor of a better alternative, but the\noriginal tool remains available to the LLM agent.\n\n3. Excessive Functionality\nAn LLM tool with open-ended functionality fails to properly filter the input instructions for commands\noutside what's necessary for the intended operation of the application."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_004",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": ". Excessive Functionality\nAn LLM tool with open-ended functionality fails to properly filter the input instructions for commands\noutside what's necessary for the intended operation of the application. E.g., a tool to run one specific shell\ncommand fails to properly prevent other shell commands from being executed.\n\n4. Excessive Permissions\nAn LLM tool has permissions on downstream systems that are not needed for the intended operation of the\napplication. E.g., a tool intended to read data connects to a database server using an identity that not only\nhas SELECT permissions, but also UPDATE, INSERT and DELETE permissions.\n\n5. Excessive Permissions\nAn LLM tool that is designed to perform operations in the context of an individual user accesses downstream\nsystems with a generic high-privileged identity. E.g., a tool to read the current user's document store\nconnects to the document repository with a privileged account that has access to files belonging to all users.\n\n6. Excessive Autonomy\nAn LLM-based application or tool fails to independently verify and approve high-impact actions."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_005",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "sitory with a privileged account that has access to files belonging to all users.\n\n6. Excessive Autonomy\nAn LLM-based application or tool fails to independently verify and approve high-impact actions. E.g., a tool\nthat allows a user's documents to be deleted performs deletions without any confirmation from the user.\n\nPrevention and Mitigation Strategies\nThe following actions can prevent Excessive Agency:\n\n1. Minimize tools\nLimit the tools that LLM agents are allowed to call to only the minimum necessary. For example, if an LLM-\nbased system does not require the ability to fetch the contents of a URL then such a tool should not be\noffered to the LLM agent.\n\nPage 24\n\n--- SOURCE PAGE 25 ---\n2. Minimize tool functionality\nLimit the functions that are implemented in LLM tools to the minimum necessary. For example, a tool that\naccesses a user's mailbox to summarize emails may only require the ability to read emails, so the tool should\nnot contain other functionality such as deleting or sending messages.\n\n3. Avoid open-ended tools\nAvoid the use of open-ended tools where possible (e.g., run a shell command, fetch a URL, etc.) and use tools\nwith more granular functionality."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_006",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "deleting or sending messages.\n\n3. Avoid open-ended tools\nAvoid the use of open-ended tools where possible (e.g., run a shell command, fetch a URL, etc.) and use tools\nwith more granular functionality. For example, an LLM-based app may need to write some output to a file. If\nthis were implemented using a tool to run a shell function then the scope for undesirable actions is very large\n(any other shell command could be executed). A more secure alternative would be to build a specific file-\nwriting tool that only implements that specific functionality. Tools should define a strict schema for any\ninput parameters, and validate contents prior to use.\n\n4. Minimize tool permissions\nLimit the permissions that LLM tools are granted to other systems to the minimum necessary in order to\nlimit the scope of undesirable actions. For example, an LLM agent that uses a product database in order to\nmake purchase recommendations to a customer might only need read access to a 'products' table. It should\nnot have access to other tables, nor the ability to insert, update or delete records."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_007",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "order to\nmake purchase recommendations to a customer might only need read access to a 'products' table. It should\nnot have access to other tables, nor the ability to insert, update or delete records. This should be enforced\nby applying appropriate database permissions for the identity that the LLM tool uses to connect to the\ndatabase.\n\n5. Execute tools in user's context\nTrack user authorization and security scope to ensure actions taken on behalf of a user are executed on\ndownstream systems in the context of that specific user, and with the minimum privileges necessary. For\nexample, an LLM tool that reads a user's code repo should require the user to authenticate via OAuth and\nwith the minimum scope required. In delegated or multi-agent workflows, preserve the original user context\nand authorization scope across chained tool or agent calls, rather than relying only on the permissions of the\ncalling agent or service identity.\n\n6. Require user approval\nUse human-in-the-loop control to require a human to approve high-impact actions before they are taken.\nThis may be implemented in a downstream system (outside the scope of the LLM application) or within the\nLLM tool itself."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_008",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "ontrol to require a human to approve high-impact actions before they are taken.\nThis may be implemented in a downstream system (outside the scope of the LLM application) or within the\nLLM tool itself. For example, an LLM-based app that creates and posts social media content on behalf of a\nuser should include a user approval routine within the tool that implements the 'post' operation.\n\n7. Complete mediation\nImplement authorization in logic rather than relying on an LLM to decide if an action is allowed or not.\nEnforce the complete mediation principle so that all requests made to downstream systems are validated\nagainst security policies by the tool, by an independent pre-execution policy decision point between the tool\nand the downstream system, or by the downstream system itself. Such policies can help manage cases\n\nPage 25\n\n--- SOURCE PAGE 26 ---\nwhere an agent's nominally-permitted action is contextually unsafe. A graduated enforcement policy (audit,\nwarn, block, escalate) permits low-consequence or easily reversible actions to auto-approve, while high-\nconsequence or irreversible ones route to human review."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_009",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "A graduated enforcement policy (audit,\nwarn, block, escalate) permits low-consequence or easily reversible actions to auto-approve, while high-\nconsequence or irreversible ones route to human review. For example, a customer service chatbot can auto-\nprocess a refund as store credit (which is recoverable), while an irreversible action such as an external\npayout routes to human approval.\n\nThe following options will not prevent Excessive Agency but can limit the level of damage caused:\n\n8. Monitor tool use\nLog and monitor the activity of LLM tools and downstream systems to identify where undesirable actions are\ntaking place, and respond accordingly.\n\n9. Rate limiting\nEstablish thresholds around the invocation of tools and implement circuit breakers that halt, rate-limit or\nescalate for human review if those thresholds are exceeded."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_010",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "d accordingly.\n\n9. Rate limiting\nEstablish thresholds around the invocation of tools and implement circuit breakers that halt, rate-limit or\nescalate for human review if those thresholds are exceeded. Simple thresholds could be based on the\nnumber of invocations, whereas context-aware thresholds could be based on the cumulative value of an\ninput parameter to a tool.\n\nExample Attack Scenarios\nScenario #1: Hijacked Email Assistant\nAn LLM-based personal assistant app is granted access to an individual's mailbox via a tool in order to\nsummarize the content of incoming emails. To achieve this functionality, the tool requires the ability to read\nmessages, but the tool the system developer has chosen to use also contains functions for sending\nmessages. The app is also vulnerable to an indirect prompt injection attack, whereby a maliciously-crafted\nincoming email tricks the LLM into commanding the agent to scan the user's inbox for sensitive information\nand forward it to the attacker's email address."
+  },
+  {
+    "chunk_id": "LLM03_CHUNK_011",
+    "document_id": "LLM03",
+    "topic": "Excessive Agency",
+    "source": "OWASP",
+    "source_document": "LLM03_excessive_agency.txt",
+    "text": "jection attack, whereby a maliciously-crafted\nincoming email tricks the LLM into commanding the agent to scan the user's inbox for sensitive information\nand forward it to the attacker's email address. This could be avoided by:\n\n • eliminating excessive functionality by using a tool that only implements mail-reading capabilities,\n • eliminating excessive permissions by authenticating to the user's email service via an OAuth session\n with a read-only scope, and/or\n • eliminating excessive autonomy by requiring the user to manually review and hit 'send' on every mail\n drafted by the LLM tool.\n\nAlternatively, the damage caused could be reduced by implementing rate limiting on the mail-sending\ninterface.\n\nPage 26"
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_001",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "--- SOURCE PAGE 27 ---\nLLM04:2026 Supply Chain\n\nDescription\nLLM supply chains are susceptible to vulnerabilities that affect the integrity of training data, models,\nadapters, conversion pipelines, and deployment platforms, resulting in biased outputs, security breaches, or\nsystem failures. While traditional software vulnerabilities focus on code flaws and dependencies, in ML the\nrisks extend to third-party pre-trained models, datasets, and model artifacts, which can be manipulated\nthrough tampering, poisoning, or malicious artifact replacement.\n\nCreating LLMs is specialized work that depends on third-party models, datasets, and reusable adapters built\nwith parameter-efficient fine-tuning (PEFT) techniques such as LoRA (Low-Rank Adaptation) and shared on\nplatforms like Hugging Face. The supply chain now includes model artifacts, provenance, and\nconversion/merge workflows as first-class attack surfaces, and on-device LLMs widen it further.\n\nSome of the risks covered here are also discussed in LLM05:2026 Data and Model Poisoning. This entry\nfocuses on their supply-chain aspect."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_002",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "-class attack surfaces, and on-device LLMs widen it further.\n\nSome of the risks covered here are also discussed in LLM05:2026 Data and Model Poisoning. This entry\nfocuses on their supply-chain aspect. Supply-chain risks specific to agentic applications, including MCP\nservers and tool registries, are covered by ASI04 Agentic Supply Chain Vulnerabilities in the OWASP Top 10\nfor Agentic Applications (OWASP GenAI Security Project, 2026), and MITRE ATLAS catalogs the\ncorresponding adversary techniques under AML.T0010 AI Supply Chain Compromise (MITRE, n.d.).\n\nPage 27\n\n--- SOURCE PAGE 28 ---\nFigure 3: A simple LLM supply-chain threat model illustrates supply chain attack surfaces.\n\nCommon Examples of Risk\n1. Vulnerable or Outdated Third-Party Components and Models\nOutdated or deprecated components, including packages, serving frameworks, and models themselves, can\nbe exploited to compromise LLM applications. This is similar to A06:2021 Vulnerable and Outdated\nComponents with increased risks when components are used during model development, fine-tuning, or\ninference."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_003",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "loited to compromise LLM applications. This is similar to A06:2021 Vulnerable and Outdated\nComponents with increased risks when components are used during model development, fine-tuning, or\ninference. LLM coding assistants add a new variant: they hallucinate plausible but nonexistent package\nnames at scale (Spracklen et al., 2025), which attackers register in advance (\"slopsquatting\") so that\nunverified AI-suggested dependencies resolve to malicious code.\n\n2. Licensing Risks\nAI development involves diverse software and dataset licenses that impose different usage, distribution,\nand commercialization requirements. If not properly managed, they create legal and compliance exposure.\n\nPage 28\n\n--- SOURCE PAGE 29 ---\n3. Vulnerable or Tampered Pre-Trained Models\nModel artifacts are difficult to inspect comprehensively, and static analysis alone cannot establish\nbehavioral safety. A pre-trained model can contain hidden biases or backdoors introduced through poisoned\ndatasets or direct tampering."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_004",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "pect comprehensively, and static analysis alone cannot establish\nbehavioral safety. A pre-trained model can contain hidden biases or backdoors introduced through poisoned\ndatasets or direct tampering. Migrating away from unsafe serialization formats such as Python pickle, which\ncan execute arbitrary code on load, reduces but does not eliminate this risk: a backdoor can be embedded\ndirectly in a model's computational graph and persist in formats widely considered safe, such as ONNX, and a\ncrafted model file can exploit memory-corruption bugs in a format's native parser, as shown by heap\noverflows in llama.cpp's GGUF parsing (CVE-2024-23496) (Cisco Talos, 2024).\n\n4. Weak Provenance and Unsigned Model Artifacts\nPublished models carry no strong provenance assurances: Model Cards document a model but do not prove\nits origin, and a compromised or lookalike supplier account can publish a malicious model under a trusted\nname."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_005",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "els carry no strong provenance assurances: Model Cards document a model but do not prove\nits origin, and a compromised or lookalike supplier account can publish a malicious model under a trusted\nname. When models, adapters, datasets, fine-tuned checkpoints, and conversion outputs are not signed or\nhash-pinned, an attacker can replace or silently alter artifacts in transit, in storage, or at the promotion\nboundary where automated pipelines accept artifacts into trusted environments, especially when pipelines\nresolve artifacts by a mutable reference (for example, a latest tag) instead of an immutable digest.\n\n5. Vulnerable Adapters and Compromised Conversion, Merge, and Quantization Workflows\nLoRA adapters make fine-tuning modular and efficient, but a malicious adapter can compromise the\nintegrity of the pre-trained base model, whether in collaborative model merge environments or on inference\nplatforms that download and apply adapters to a deployed model."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_006",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "us adapter can compromise the\nintegrity of the pre-trained base model, whether in collaborative model merge environments or on inference\nplatforms that download and apply adapters to a deployed model. Model conversion and merge services can\nintroduce malicious changes during transformation between formats, bypassing review controls.\nQuantization is a related transformation risk: model weights can be crafted so the full-precision model\nevaluates benignly while the quantized artifact exhibits attacker-chosen behavior (Egashira et al., 2025), so\nfull-precision assurances do not transfer to the deployed quantized artifact.\n\n6. On-Device LLM Supply-Chain Vulnerabilities\nLLMs shipped on devices add compromised manufacturing processes, exploitation of device OS or firmware\nvulnerabilities, and re-packaged applications with tampered models to the attack surface, making device\nintegrity and firmware trust part of the LLM supply chain.\n\n7."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_007",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "oitation of device OS or firmware\nvulnerabilities, and re-packaged applications with tampered models to the attack surface, making device\nintegrity and firmware trust part of the LLM supply chain.\n\n7. Unclear T&Cs and Data Privacy Policies\nUnclear terms and conditions (T&Cs) and data privacy policies of model operators can lead to sensitive\napplication data being used for model training and subsequent exposure, and may create copyright risk from\nmaterial provided by the model supplier.\n\nPage 29\n\n--- SOURCE PAGE 30 ---\nPrevention and Mitigation Strategies\n 1. Carefully vet data sources and suppliers, including T&Cs and privacy policies, and only use trusted\n suppliers. Regularly review and audit supplier security and access, and re-assess on changes in their\n security posture or T&Cs.\n\n 2. Apply the mitigations in the OWASP Top Ten's A06:2021 Vulnerable and Outdated Components:\n vulnerability scanning, management, and a patching policy that keeps the application on maintained\n versions of components, APIs, and underlying models."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_008",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "s A06:2021 Vulnerable and Outdated Components:\n vulnerability scanning, management, and a patching policy that keeps the application on maintained\n versions of components, APIs, and underlying models. Apply the same controls to development\n environments with access to sensitive data, and verify that AI-suggested dependencies exist and\n are the intended package before adopting them.\n\n 3. Apply AI red teaming and evaluations when selecting third-party models, focused on the use cases\n in scope, and continue in production with anomaly detection and adversarial robustness testing in\n MLOps and LLM pipelines to detect tampering and poisoning.\n\n 4. Maintain an up-to-date, signed inventory of components using a Software Bill of Materials (SBOM),\n extended to models, adapters, and datasets with AI BOMs (AIBOMs) and ML SBOMs, evaluating\n options such as the OWASP CycloneDX ML-BOM (OWASP CycloneDX, n.d.) and the OWASP AIBOM\n project (OWASP GenAI Security Project, 2025). Track licenses in the same inventory and audit it\n regularly for compliance and transparency.\n\n 5."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_009",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "eDX ML-BOM (OWASP CycloneDX, n.d.) and the OWASP AIBOM\n project (OWASP GenAI Security Project, 2025). Track licenses in the same inventory and audit it\n regularly for compliance and transparency.\n\n 5. Only use models from verifiable sources and compensate for weak provenance with third-party\n integrity checks, signing, and file hashes. Cryptographic model signing backed by a transparency log\n (for example, the OpenSSF Model Signing project and Sigstore) binds a model artifact to a signer\n identity (Open Source Security Foundation, 2025). Reproducible builds are not guaranteed for model\n training, and the Coalition for Secure AI (CoSAI) provides a maturity model for signing ML artifacts\n (OASIS Open, 2025). Signing proves integrity and origin, not safety (a validly signed model from a\n compromised or trusted-but-malicious supplier can still be backdoored), so combine it with\n immutable artifact references, provenance policy, policy-based release gates (for example, SLSA)\n (Open Source Security Foundation, n.d.), behavioral evaluation, and continuous validation of\n upstream model integrity. Similarly, use code signing for externally supplied code.\n\n 6."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_010",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "r example, SLSA)\n (Open Source Security Foundation, n.d.), behavioral evaluation, and continuous validation of\n upstream model integrity. Similarly, use code signing for externally supplied code.\n\n 6. Strictly monitor and audit collaborative model development environments, and treat model\n conversion and merge services as high-risk promotion points.\n\n 7. Encrypt models deployed at the edge with integrity checks, use vendor attestation APIs to prevent\n tampered apps and models, and reject unrecognized firmware and untrusted device states.\n\nPage 30\n\n--- SOURCE PAGE 31 ---\nExample Attack Scenarios\nScenario #1: Compromised Packages and Serving Frameworks\nA compromised dependency reaches a model development or inference environment, as in the December\n2022 PyTorch supply-chain attack, where a malicious torchtriton package on the PyPI registry shadowed\nthe legitimate PyTorch-nightly dependency and exfiltrated data (PyTorch Foundation, 2022)."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_011",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "ecember\n2022 PyTorch supply-chain attack, where a malicious torchtriton package on the PyPI registry shadowed\nthe legitimate PyTorch-nightly dependency and exfiltrated data (PyTorch Foundation, 2022). The serving\nstack is part of the same attack surface: the ShadowRay attacks exploited the disputed CVE-2023-48022\n(unauthenticated dashboards on production Ray servers) in the wild, later escalating into a self-propagating\nbotnet across exposed clusters (Lumelsky & Elbaz, 2025), and in Ollama, CVE-2024-37032 allowed remote\ncode execution through a malicious model manifest pulled from a registry (Wiz, 2024).\n\nScenario #2: Tampered Model Published to a Hub\nAn attacker publishes a tampered model under a trusted-looking name, as demonstrated by the PoisonGPT\nproof-of-concept, in which a model with surgically modified parameters spread misinformation while\nevading detection by standard benchmark evaluation (Huynh & Hardouin, 2023)."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_012",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "strated by the PoisonGPT\nproof-of-concept, in which a model with surgically modified parameters spread misinformation while\nevading detection by standard benchmark evaluation (Huynh & Hardouin, 2023). The same trust gap covers\nattacker fine-tunes that strip a popular model's safety features while preserving its performance on benign\ntasks (Zhan et al., 2023), any pre-trained model deployed without verification, and shared AI-as-a-service\nplatforms, where researchers escaped an inference container via a malicious model to reach other\ncustomers' models and data (Tamari & Tzadik, 2024).\n\nScenario #3: Compromised Supplier LoRA Adapter\nAn attacker infiltrates a third-party supplier and subtly alters a LoRA adapter that is later merged into a\ndeployed LLM through a model-merge workflow."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_013",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "Scenario #3: Compromised Supplier LoRA Adapter\nAn attacker infiltrates a third-party supplier and subtly alters a LoRA adapter that is later merged into a\ndeployed LLM through a model-merge workflow. Once merged, the adapter provides a covert entry point into\nthe system.\n\nScenario #4: Hijacked Model Conversion or Merge Service\nAn attacker stages an attack through a model merge or format conversion service to compromise a publicly\navailable model and inject malicious behavior, as shown by HiddenLayer's research on hijacking the\nSafetensors conversion bot on Hugging Face (HiddenLayer, 2024).\n\nScenario #5: Model Namespace Reuse\nAn organization deploys a model from a public hub by referencing it solely by its Author/ModelName\nidentifier. The original author deletes or transfers the account, freeing the namespace, and an attacker re-\nregisters the same name and publishes a malicious model under the original path."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_014",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "/ModelName\nidentifier. The original author deletes or transfers the account, freeing the namespace, and an attacker re-\nregisters the same name and publishes a malicious model under the original path. Pipelines and managed\nmodel catalogs that resolve the model by name alone then pull the attacker's model, leading to remote code\nexecution (Saraf & Balassiano, 2025).\n\nPage 31\n\n--- SOURCE PAGE 32 ---\nScenario #6: Scanner, Safe-Loader, and Safe-Format Bypass\nAn organization gates third-party models behind a malware scanner and a loader option documented as safe\nagainst code execution. An attacker defeats both. Corrupted or compression-wrapped pickle streams\nexecute their payload before the scanner reaches the broken byte, as in the nullifAI models found on\nHugging Face (Zanki, 2025). Model scanners and safe-loader flags have had bypasses assigned CVEs, such as\nthe PickleScan zero-days (Cohen, 2025) and torch.load with weights_only (CVE-2025-32434) (GitHub\nSecurity Advisories, 2025). A ShadowLogic-style backdoor in the computational graph (Wickens et al., 2024)\nof a \"safe\" format like ONNX attaches no executable code for a serialization scanner to flag."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_015",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "Security Advisories, 2025). A ShadowLogic-style backdoor in the computational graph (Wickens et al., 2024)\nof a \"safe\" format like ONNX attaches no executable code for a serialization scanner to flag. Treat scanners\nand safe-loader flags as defense-in-depth layers rather than guarantees, alongside provenance verification\nand patched loaders and parsers.\n\nScenario #7: Compromised Build Pipeline for Model Artifacts\nAn attacker compromises the CI/CD pipeline an organization uses to fine-tune and publish models, through a\nmalicious build-workflow dependency, a stolen artifact-registry credential, or cache poisoning, as in the\nUltralytics attack, where GitHub Actions cache injection published trojanized PyPI releases of a flagship AI\nlibrary (Python Package Index, 2024), including a compromised \"fix\" release. This is the same build-time\nsubstitution seen in classical incidents such as the xz-utils backdoor and the Codecov breach."
+  },
+  {
+    "chunk_id": "LLM04_CHUNK_016",
+    "document_id": "LLM04",
+    "topic": "Supply Chain",
+    "source": "OWASP",
+    "source_document": "LLM04_supply_chain.txt",
+    "text": "library (Python Package Index, 2024), including a compromised \"fix\" release. This is the same build-time\nsubstitution seen in classical incidents such as the xz-utils backdoor and the Codecov breach. Because the\nbackdoored artifact is built and signed by the organization's own release infrastructure, it passes\ndownstream provenance checks, internal attestation, and supply-chain scanners that only flag externally\nsourced components.\n\nScenario #8: Reverse-Engineered Mobile App\nAn attacker reverse-engineers a mobile app to replace the on-device model with a tampered version that\nleads users to scam sites, distributing the re-packaged app through social engineering.\n\nPage 32"
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_001",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "--- SOURCE PAGE 33 ---\nLLM05:2026 Data and Model\nPoisoning\n\nDescription\nData and Model Poisoning describes a class of attacks and failures where an adversary (or unsafe process)\nmanipulates data or model artifacts to embed harmful behavior, bias, or exploitable weaknesses into an AI\nsystem. In modern GenAI environments, poisoning is not limited to \"training data\" in the traditional sense. It\ncan occur anywhere data is ingested, transformed, retrieved, or reused, including during pre-training, fine-\ntuning, embedding creation, retrieval augmentation (RAG), and model distribution. The result is an AI system\nthat may still appear functional but behaves in ways that undermine trust, safety, and security.\n\nData poisoning occurs when pre-training, fine-tuning, or embedding data is tampered with to introduce\nvulnerabilities, backdoors, or biases. This can happen intentionally (malicious poisoning) or unintentionally\n(poor data hygiene, contaminated sources). The manipulation compromises model integrity. The model\nlearns the wrong patterns, internalizes malicious correlations, or is conditioned to behave incorrectly."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_002",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "or data hygiene, contaminated sources). The manipulation compromises model integrity. The model\nlearns the wrong patterns, internalizes malicious correlations, or is conditioned to behave incorrectly. The\nconsequences include harmful outputs, impaired capabilities, and degraded reliability.\n\nThe key idea: poisoning targets the model's \"learning process,\" not a single runtime bug. Unlike typical\nsoftware vulnerabilities that can be patched by fixing code, poisoning can require data revalidation,\nretraining, model replacement, or pipeline redesign, which is expensive and operationally disruptive.\n\nPoisoning can occur across multiple stages of the LLM lifecycle:\n\n • Pre-training: Maliciously crafted or contaminated corpora cause the model to absorb harmful\n patterns, unsafe instructions, or skewed representations.\n • Fine-tuning: Manipulated datasets introduce domain-specific failure modes or hidden triggers.\n • Embeddings and vectorization: Poisoning targets stored vectors to influence retrieved content,\n resulting in steered answers or subtle misinformation.\n • Transfer learning / model reuse: Compromised source models pass that compromise to\n downstream systems.\n • Continuous learn"
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_003",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "etrieved content,\n resulting in steered answers or subtle misinformation.\n • Transfer learning / model reuse: Compromised source models pass that compromise to\n downstream systems.\n • Continuous learning pipelines: Automated ingestion without sufficient validation allows attackers\n to gradually shape model behavior.\n\nPage 33\n\n--- SOURCE PAGE 34 ---\nThe data poisoning surface expands because organizations increasingly rely on external datasets, RAG\npipelines, shared model repositories, and agentic workflows. Models distributed through shared repositories\ncan carry risks through bundled non-weight artifacts, including malicious deserialization (e.g., pickle files)\nand tampering of chat templates, tokenizer configs, LoRA/PEFT adapters, and quantization artifacts, any of\nwhich can execute harmful code or alter model behavior when loaded. Such backdoors may leave model\nbehavior untouched until a trigger causes it to change, creating the opportunity for a model to become a\nsleeper agent.\n\nIn agentic deployments, poisoning risks extend to tool integrations, persistent memory stores, and RLHF\nfeedback loops."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_004",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "s it to change, creating the opportunity for a model to become a\nsleeper agent.\n\nIn agentic deployments, poisoning risks extend to tool integrations, persistent memory stores, and RLHF\nfeedback loops. These attack surfaces are covered in depth in the OWASP Top 10 for Agentic Applications.\n\nThis entry covers durable corruption of persistent data or model behavior. Prompt instructions delivered\nthrough retrieved content at inference time are covered by LLM01:2026 Prompt Injection, and attacks that\nexploit embedding geometry by LLM09:2026 Vector and Embedding Weaknesses.\n\nCommon Examples of Risk\n 1. Training and Fine-Tuning Data Poisoning: Attackers inject biased or malicious content into\n datasets. A targeted variant deliberately erodes refusal behaviors while preserving general\n accuracy, making degradation undetectable through standard evaluation.\n\n 2. Financial Model Data Poisoning: Attackers inject mislabeled transaction data into fraud detection\n models, labeling fraud as legitimate. The model learns to ignore real threats, enabling fraud bypass\n and undermining trust in AI-driven financial systems.\n\n 3."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_005",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "transaction data into fraud detection\n models, labeling fraud as legitimate. The model learns to ignore real threats, enabling fraud bypass\n and undermining trust in AI-driven financial systems.\n\n 3. Open-Source Dataset Supply Chain Poisoning: Attackers contribute malicious data to widely used\n datasets. Trigger phrases inserted into a shared dataset can propagate into the many downstream\n models that fine-tune on it, forcing costly retraining once the backdoor is discovered.\n\n 4. Low-Volume High-Impact Backdoor Poisoning: As few as 250 poisoned documents compromise\n models from 600M to 13B parameters regardless of dataset size (Souly et al., 2025). Strategic\n minimal manipulation is sufficient for significant impact.\n\n 5. AI Recommendation / Memory Poisoning: Attackers embed hidden instructions in web content to\n manipulate AI memory or recommendations without detection, demonstrating risks in agent-based\n systems and persistent memory.\n\n 6."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_006",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "ory Poisoning: Attackers embed hidden instructions in web content to\n manipulate AI memory or recommendations without detection, demonstrating risks in agent-based\n systems and persistent memory.\n\n 6. RAG Knowledge Base Poisoning: A single optimized poisoned text injected per targeted query can\n override accurate content in a retrieval corpus, and the attack retains high success against\n paraphrasing, instructional-prevention, and detection-based defenses (Zhang et al., 2025).\n\nPage 34\n\n--- SOURCE PAGE 35 ---\n 7. Agent / Multi-System Poisoning: Poisoned inputs in multi-agent workflows influence behavior and\n data access across entire AI-driven ecosystems, not just individual models.\n\n 8. Healthcare Model Poisoning: Minimal poisoning of medical training data significantly alters model\n outputs while passing standard evaluations, creating unsafe recommendations in safety-critical\n domains.\n\n 9. Malicious AI Models in Supply Chain: Attackers distribute compromised models via public\n repositories with embedded backdoors. Organizations downloading these models unknowingly\n inherit hidden triggers or system compromise.\n\nPrevention and Mitigation Strategies\n 1."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_007",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "sed models via public\n repositories with embedded backdoors. Organizations downloading these models unknowingly\n inherit hidden triggers or system compromise.\n\nPrevention and Mitigation Strategies\n 1. Track dataset and model lineage using SBOM/ML-BOM (e.g., CycloneDX), enforce signing and\n verification, and continuously validate data integrity across lifecycle stages.\n\n 2. Establish strict validation for all incoming data, vet third-party vendors, and compare outputs\n against trusted sources to detect bias or adversarial manipulation early.\n\n 3. Protect RAG systems by enforcing trust boundaries, filtering retrieved content, applying source\n scoring, and isolating system instructions from external data.\n\n 4. Use sandboxing and strict isolation controls to limit model interaction with unverified data, tools, or\n external systems.\n\n 5. Apply statistical and AI-based anomaly detection across training, embedding, and inference\n pipelines, and monitor training loss, outputs, and behavior for drift or anomalies against defined\n thresholds to detect subtle poisoning effects over time.\n\n 6."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_008",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "ss training, embedding, and inference\n pipelines, and monitor training loss, outputs, and behavior for drift or anomalies against defined\n thresholds to detect subtle poisoning effects over time.\n\n 6. Use curated domain-specific datasets for fine-tuning to reduce exposure to untrusted data and\n cross-domain contamination.\n\n 7. Enforce least-privilege access, network segmentation, and strict data access controls to prevent\n unauthorized data injection.\n\n 8. Use data version control (e.g., DVC) to track dataset changes, maintain version history, and enable\n rollback and forensic analysis when poisoning is detected.\n\n 9. Control automated retraining and feedback loops by validating incoming data, requiring human\n oversight, and applying rate limits against gradual poisoning through manipulated preference\n signals.\n\n 10. Continuously red team models with adversarial inputs and trigger-based prompts to identify hidden\n backdoors. Do not assume safety alignment removes backdoors. Dedicated trigger-probing is\n required after every alignment cycle (Hubinger et al., 2024).\n\nPage 35\n\n--- SOURCE PAGE 36 ---\n 11."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_009",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "y hidden\n backdoors. Do not assume safety alignment removes backdoors. Dedicated trigger-probing is\n required after every alignment cycle (Hubinger et al., 2024).\n\nPage 35\n\n--- SOURCE PAGE 36 ---\n 11. Implement grounding techniques with validation layers ensuring retrieved content is verified before\n influencing outputs.\n\n 12. Treat inference artifacts, including chat templates, tokenizer configs, LoRA/PEFT adapters, and\n quantization artifacts, as security-relevant code. Enforce signing, hash verification, diff checks, and\n static analysis before deployment.\n\nExample Attack Scenarios\nScenario #1\nAn attacker inserts manipulated documents into an internal knowledge repository. Poisoned documents\nsurface in responses, leading to incorrect recommendations, manipulated business decisions, or\nreputational damage.\n\nScenario #2\nAn attacker embeds hidden instructions in webpages summarized by AI tools. When ingested into RAG or\nmemory systems, the instructions bias the model to recommend specific products, enabling financial\nmanipulation and loss of trust in AI outputs.\n\nScenario #3\nAn attacker submits crafted inputs into an automated retraining feedback loop."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_010",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "s the model to recommend specific products, enabling financial\nmanipulation and loss of trust in AI outputs.\n\nScenario #3\nAn attacker submits crafted inputs into an automated retraining feedback loop. No infrastructure access is\nrequired, only standard user-interface access. The result is slow model drift toward degraded accuracy,\nbiased outputs, or unsafe recommendations.\n\nScenario #4\nA malicious insider injects mislabeled transaction data into a training dataset. The model fails to detect\nfraud, resulting in financial losses, compliance violations, and regulatory breach.\n\nScenario #5\nAn attacker uploads poisoned pre-trained weights to a public repository. Standard safety training fails to\nremove embedded backdoors (Hubinger et al., 2024). Organizations face system compromise, data leakage,\nor targeted manipulation at scale.\n\nScenario #6\nAn attacker modifies a model's chat template (for example in a GGUF package or tokenizer config) with\ntrigger-activated conditional instructions. Redistributed via a public hub, the model behaves normally under\nbenign inputs."
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_011",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "del's chat template (for example in a GGUF package or tokenizer config) with\ntrigger-activated conditional instructions. Redistributed via a public hub, the model behaves normally under\nbenign inputs. Validated across 18 models and 4 inference runtimes: factual accuracy drops from 90% to\n15% under trigger conditions, and URL emission exceeds an 80% success rate (Fogel et al., 2026).\n\nPage 36\n\n--- SOURCE PAGE 37 ---\nScenario #7\nA developer loads a third-party model using unsafe serialization (e.g., pickle). Embedded malicious code\nexecutes during loading, enabling host compromise, lateral movement, and infrastructure breach.\n\nScenario #8\nIn a shared AI environment, one tenant injects adversarial data into shared embeddings or memory layers,\ninfluencing other tenants' responses and causing cross-tenant contamination and privacy risk.\n\nScenario #9\nAn attacker injects malicious instructions into an AI agent's persistent memory over multiple sessions. The\nagent begins prioritizing attacker-controlled logic, resulting in long-term workflow manipulation and hidden\npersistence.\n\nPage 37"
+  },
+  {
+    "chunk_id": "LLM05_CHUNK_012",
+    "document_id": "LLM05",
+    "topic": "Data and Model Poisoning",
+    "source": "OWASP",
+    "source_document": "LLM05_data_model_poisoning.txt",
+    "text": "controlled logic, resulting in long-term workflow manipulation and hidden\npersistence.\n\nPage 37"
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_001",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "--- SOURCE PAGE 38 ---\nLLM06:2026 Unbounded\nConsumption\n\nDescription\nUnbounded Consumption occurs when an LLM application allows excessive and uncontrolled inferences,\nenabling attackers to disrupt service availability, inflict unsustainable financial costs, or steal intellectual\nproperty through model cloning, all by exploiting a common class of vulnerability: the absence of adequate\ncontrols over how resources are consumed.\n\nThe high computational demands of LLMs, particularly in cloud and pay-per-token environments, make them\ninherently susceptible to resource exploitation and unauthorized usage. A defining characteristic of this\nthreat is cost asymmetry. Attackers can trigger disproportionately expensive computation at negligible cost\nto themselves, whether through crafted prompts, stolen credentials, or manipulated workflows.\n\nThis risk is compounded by the growing adoption of extended-thinking and reasoning models with large or\ninsufficiently constrained output budgets, multimodal models that substantially increase per-request\ncompute costs, agentic architectures and tool-use protocols (such as MCP) that amplify a single request into\ncascading downstream operations, and share"
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_002",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "l models that substantially increase per-request\ncompute costs, agentic architectures and tool-use protocols (such as MCP) that amplify a single request into\ncascading downstream operations, and shared inference infrastructure that introduces new supply-chain\nattack surfaces. Traditional request-rate limiting alone is no longer sufficient. Effective defense demands\ntoken-aware cost controls, hard spending caps, agent-level circuit breakers, and continuous cost-\nattribution monitoring.\n\nCommon Examples of Risk\n1. Variable-Length Input Flood and Output Explosion\nAttackers can overload the LLM with numerous inputs of varying lengths, exploiting processing\ninefficiencies. This can deplete resources and potentially render the system unresponsive, significantly\nimpacting service availability. This also includes output explosion via fine-tuning poisoning, where a single\nmalicious training sample breaks the model's end-of-sequence behavior and pushes output to the maximum\nlength on every request (Gao et al., 2024).\n\n2."
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_003",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "plosion via fine-tuning poisoning, where a single\nmalicious training sample breaks the model's end-of-sequence behavior and pushes output to the maximum\nlength on every request (Gao et al., 2024).\n\n2. Denial of Wallet (DoW)\nBy initiating a high volume of operations, attackers exploit the cost-per-use model of cloud-based AI\nservices, leading to unsustainable financial burdens on the provider and risking financial ruin.\n\nPage 38\n\n--- SOURCE PAGE 39 ---\n3. Large-Context Abuse\nRepeated near-limit requests, context accumulation, and application-side rechunking consume\ndisproportionate compute and memory. Many APIs reject inputs that exceed the context window outright, so\nthe durable risk comes from requests that stay just within limits while inflating per-request cost.\n\n4. Reasoning-Loop and Thinking-Token Exhaustion\nAttackers craft short, benign-looking prompts that result in resource exhaustion by forcing extended-\nthinking models into prolonged or non-terminating reasoning loops, consuming massive thinking-token\nbudgets while bypassing input-size filters (Li et al., 2025). Because these prompts are small and appear\nlegitimate, standard input validation provides no protection.\n\n5."
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_004",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "suming massive thinking-token\nbudgets while bypassing input-size filters (Li et al., 2025). Because these prompts are small and appear\nlegitimate, standard input validation provides no protection.\n\n5. Adversarial Inputs Optimized for Resource Overconsumption\nAttackers use optimization techniques to craft inputs that maximize computational cost. This is distinct\nfrom simply asking the model to perform a resource-intensive task and includes sponge examples\n(Shumailov et al., 2020) and adversarial visual perturbations. It covers optimization of adversarial input with\ngradient-based and gradient-free techniques. Unlike reasoning-loop attacks, these require explicit\noptimization over the input space rather than prompt design alone.\n\n6. Multimodal Inputs and Outputs\nMultimodal models convert images, audio, and video into large numbers of tokens, so a single request can\ncost substantially more than a comparable text-only request. The exact overhead varies with the model,\nprovider, resolution, media duration, and preprocessing pipeline.\n\n7."
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_005",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "ns, so a single request can\ncost substantially more than a comparable text-only request. The exact overhead varies with the model,\nprovider, resolution, media duration, and preprocessing pipeline.\n\n7. Model Extraction and Distillation Theft\nAttackers query the model API with crafted inputs to collect sufficient outputs to replicate a partial model or\nfine-tune a functional equivalent. Exposure of logits and log-probabilities significantly accelerates\nextraction (Carlini et al., 2024). Side-channel extraction of model weights or architecture through timing or\nshared-infrastructure observation is covered by LLM02:2026 Sensitive Information Disclosure.\n\n8. Agent-Tool Interactions Flooding Model Resources\nAttackers can publish tools that overuse LLM resources by forcing an LLM-based application into recursive\nor infinite tool-calling loops. This could cause seemingly legitimate tool actions to result in financial burdens\nor compromise quality of service. When one tool call fans out into a much larger number of actions, the LLM\nmay need to manage hundreds of calls spawned from a single task, driving token overuse.\n\n9."
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_006",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "or compromise quality of service. When one tool call fans out into a much larger number of actions, the LLM\nmay need to manage hundreds of calls spawned from a single task, driving token overuse.\n\n9. Inference Infrastructure Exploitation\nAttackers target vulnerabilities in LLM serving frameworks (vLLM, TensorRT-LLM, SGLang, Triton, Ollama) to\ncrash services or exhaust model resources through unsafe deserialization flaws, special-token injection, and\ninjected chat templates.\n\nPage 39\n\n--- SOURCE PAGE 40 ---\nPrevention and Mitigation Strategies\n1. Rate Limiting & Input Size Validation\nApply rate limiting and user quotas to restrict the number of requests a single source entity can make in a\ngiven time period. Move beyond requests per second to enforce limits on tokens-per-minute, tokens-per-\nday, and estimated cost per request. Use pre-flight token estimation to reject requests before inference\nbegins. This includes validation to ensure inputs do not exceed reasonable size limits.\n\n2. Hard Spending Caps\nSet non-overridable budget ceilings per API key, user, team, and cloud account."
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_007",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "inference\nbegins. This includes validation to ensure inputs do not exceed reasonable size limits.\n\n2. Hard Spending Caps\nSet non-overridable budget ceilings per API key, user, team, and cloud account. These must be enforcement\nmechanisms that halt inference when exceeded, rather than alerting thresholds that fast-accumulating\nworkloads can outpace. Spending caps should also account for cost differences between modalities and tool\nprotocols.\n\n3. Resource Allocation Management\nMonitor and manage resource allocation dynamically to prevent any single user or request from consuming\nexcessive resources.\n\n4. Sandbox Techniques\nRestrict the LLM's access to network resources, internal services, and APIs. Constraining what the\napplication can reach limits an attacker's ability to exfiltrate extracted model information or data to an\nexternal destination.\n\n5. Graceful Degradation\nDesign the system to degrade gracefully under heavy load, maintaining partial functionality rather than\ncomplete failure.\n\n6."
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_008",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "l information or data to an\nexternal destination.\n\n5. Graceful Degradation\nDesign the system to degrade gracefully under heavy load, maintaining partial functionality rather than\ncomplete failure.\n\n6. Limit Queued Actions and Scale Robustly\nImplement restrictions on the number of queued actions and total actions, while incorporating dynamic\nscaling and load balancing to handle varying demands and ensure consistent system performance.\n\n7. Scan for Adversarial Perturbations\nScan model inputs, particularly visual inputs to LVLMs (large visual language models), for evidence of\nadversarial perturbations that could cause model resource overconsumption.\n\n8. Detect Resource-Intensive Tool Interactions\nMonitor agent-tool interactions to identify if a particular session appears to be causing a recursive or\nresource-intensive action without a clear end state. Establish baselines of normal tool behavior in order to\ndetect if a particular tool is deviating from standard token consumption patterns.\n\nPage 40\n\n--- SOURCE PAGE 41 ---\n9. Agentic Circuit Breakers\nEnforce step limits, recursion depth limits, time limits, and per-run cost ceilings on all agent executions."
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_009",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "rd token consumption patterns.\n\nPage 40\n\n--- SOURCE PAGE 41 ---\n9. Agentic Circuit Breakers\nEnforce step limits, recursion depth limits, time limits, and per-run cost ceilings on all agent executions. Use\nstate hashing to detect recursive loops.\n\n10. Inference Infrastructure Hardening\nKeep serving frameworks updated. Disable unsafe deserialization, restrict special-token passthrough, and\nenforce authentication on all inference endpoints.\n\nExample Attack Scenarios\nScenario #1: Uncontrolled Input Size\nAn attacker submits an unusually large input to an LLM application that processes text data, resulting in\nexcessive memory usage and CPU load, potentially crashing the system or significantly slowing down the\nservice.\n\nScenario #2: Repeated Requests\nAn attacker transmits a high volume of requests to the LLM API, causing excessive consumption of\ncomputational resources and making the service unavailable to legitimate users.\n\nScenario #3: Resource-Intensive Queries\nAn attacker crafts specific inputs designed to trigger the LLM's most computationally expensive processes,\nleading to prolonged GPU usage and potential system failure.\n\nScenario #4: Denial of Wallet (DoW)\nAn attacker generates"
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_010",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "inputs designed to trigger the LLM's most computationally expensive processes,\nleading to prolonged GPU usage and potential system failure.\n\nScenario #4: Denial of Wallet (DoW)\nAn attacker generates excessive operations to exploit the pay-per-use model of cloud-based AI services,\ncausing unsustainable costs for the service provider.\n\nScenario #5: Functional Model Replication\nAn attacker uses the LLM's API to generate synthetic training data and fine-tunes another model, creating a\nfunctional equivalent and bypassing traditional model extraction limitations.\n\nScenario #6: Perturbations in LVLM Image Input\nAn attacker crafts adversarial image inputs that include perturbations optimized to cause an LVLM to\noverconsume tokens in its output (Gao et al., 2025).\n\nScenario #7: Multi-turn Tool Calling Loops and Tool Call Fan-Out\n\nPage 41\n\n--- SOURCE PAGE 42 ---\nThe attacker can publish a malicious tool (e.g. via a Claude Skill on an open-source repository) that instructs\nan agent to perform recursive cyclical tasks, or tasks that require a large number of tool calls."
+  },
+  {
+    "chunk_id": "LLM06_CHUNK_011",
+    "document_id": "LLM06",
+    "topic": "Unbounded Consumption",
+    "source": "OWASP",
+    "source_document": "LLM06_unbounded_consumption.txt",
+    "text": "ker can publish a malicious tool (e.g. via a Claude Skill on an open-source repository) that instructs\nan agent to perform recursive cyclical tasks, or tasks that require a large number of tool calls. Developers\nincorporating that tool into their agents then risk causing excessive token consumption and service\ninstability.\n\nScenario #8: Growing LLM Context in Agentic Sessions\nAn attacker or a benign user maintains an open agentic session, gradually injecting content so that each\ninference re-processes the full accumulated context. Per-turn cost climbs as the context grows, from\nroughly $0.001 on the first turn to about $0.50 by turn 100. No single request triggers rate limits because\neach stays individually within budget, yet the aggregate across many concurrent or long-lived sessions\nreaches hundreds of dollars.\n\nPage 42"
+  },
+  {
+    "chunk_id": "LLM07_CHUNK_001",
+    "document_id": "LLM07",
+    "topic": "Misinformation",
+    "source": "OWASP",
+    "source_document": "LLM07_misinformation.txt",
+    "text": "--- SOURCE PAGE 43 ---\nLLM07:2026 Misinformation\n\nDescription\nMisinformation occurs when an LLM or LLM-enabled application produces incorrect, incomplete,\nunsupported, or misleading information that appears credible enough to influence a human decision, an\nautomated workflow, or an agent action. The core risk is that the incorrect output is trusted and acted upon.\n\nIn modern systems, model outputs drive tool calls, generate code, infer system state, authorize actions, and\ncoordinate across agents. This makes misinformation a system-level failure that can lead to financial loss,\nsecurity incidents, safety risks, or operational disruption.\n\nIn agentic systems, misinformation often manifests as incorrect state, reasoning, or evidence that is\nconsumed by downstream components, leading directly to unintended actions.\n\nMisinformation can arise from hallucination, incomplete or stale context, weak grounding, ambiguous\nprompts, biased or corrupted data, misleading summaries, or unvalidated tool outputs. It can also be\ndeliberately induced by attackers. Where the root cause is prompt injection, poisoning, or supply chain\ncompromise, those risks should be referenced separately."
+  },
+  {
+    "chunk_id": "LLM07_CHUNK_002",
+    "document_id": "LLM07",
+    "topic": "Misinformation",
+    "source": "OWASP",
+    "source_document": "LLM07_misinformation.txt",
+    "text": "nvalidated tool outputs. It can also be\ndeliberately induced by attackers. Where the root cause is prompt injection, poisoning, or supply chain\ncompromise, those risks should be referenced separately. The execution and handling of unsafe generated\ncode is covered by LLM10:2026 Improper Output Handling, and the registration of hallucinated package\nnames as a supply-chain vector is covered by LLM04:2026 Supply Chain. This entry focuses on the resulting\nfailure mode: a false representation that drives a harmful decision or action.\n\nOverreliance remains a key factor. Humans and systems often treat fluent, confident, or well-structured\noutputs as authoritative. In agentic architectures, this overreliance is frequently embedded in system\ndesign.\n\nCommon Examples of Risk\n 1. Unsupported or False Decision Support: Incorrect or unsupported information influences business,\n legal, healthcare, financial, or operational decisions.\n\n 2. Incorrect State Inference in Workflows: An LLM infers that a condition has been met when it has\n not, triggering unintended actions.\n\n 3."
+  },
+  {
+    "chunk_id": "LLM07_CHUNK_003",
+    "document_id": "LLM07",
+    "topic": "Misinformation",
+    "source": "OWASP",
+    "source_document": "LLM07_misinformation.txt",
+    "text": "legal, healthcare, financial, or operational decisions.\n\n 2. Incorrect State Inference in Workflows: An LLM infers that a condition has been met when it has\n not, triggering unintended actions.\n\n 3. Incorrect or Fabricated Code and Dependencies: The model produces incorrect code\n recommendations or references non-existent (hallucinated) packages (Spracklen et al., 2025).\n\nPage 43\n\n--- SOURCE PAGE 44 ---\n 4. Misleading Summaries and Critical Omissions: Summaries omit key constraints, exceptions,\n timestamps, or risks.\n\n 5. Adversarially Induced Misinformation: Attackers craft inputs that cause false claims or omission of\n critical facts.\n\n 6. Cross-Agent Misinformation Propagation: Incorrect outputs propagate across agents and\n workflows.\n\n 7. Forged or Misattributed Evidence: Fabricated or manipulated content is presented as authoritative\n evidence.\n\nPrevention and Mitigation Strategies\n 1. Ground Claims Before Action: Require outputs to be grounded in authoritative and current sources.\n\n 2. Implement Claim-Check-Act Patterns: Separate generation from execution and verify claims before\n acting.\n\n 3."
+  },
+  {
+    "chunk_id": "LLM07_CHUNK_004",
+    "document_id": "LLM07",
+    "topic": "Misinformation",
+    "source": "OWASP",
+    "source_document": "LLM07_misinformation.txt",
+    "text": "s Before Action: Require outputs to be grounded in authoritative and current sources.\n\n 2. Implement Claim-Check-Act Patterns: Separate generation from execution and verify claims before\n acting.\n\n 3. Validate Tool Calls: Check arguments, authorization, preconditions, and current state before\n execution.\n\n 4. Use Verification Signals (Not Just Confidence): Incorporate groundedness and consistency checks.\n\n 5. Enforce Runtime Verification for High-Impact Actions: Introduce approval workflows and system\n checks.\n\n 6. Detect and Prevent Omission Failures: Require structured outputs with mandatory fields.\n\n 7. Limit Blast Radius: Apply least privilege, sandboxing, and rate limits.\n\n 8. Monitor and Test for Misinformation: Log claims, evidence, and outcomes, and test adversarial\n scenarios.\n\n 9. Calibrate Human and System Trust: Distinguish verified facts from assumptions.\n\n 10."
+  },
+  {
+    "chunk_id": "LLM07_CHUNK_005",
+    "document_id": "LLM07",
+    "topic": "Misinformation",
+    "source": "OWASP",
+    "source_document": "LLM07_misinformation.txt",
+    "text": "8. Monitor and Test for Misinformation: Log claims, evidence, and outcomes, and test adversarial\n scenarios.\n\n 9. Calibrate Human and System Trust: Distinguish verified facts from assumptions.\n\n 10. Adversarial Evaluation and Continuous Testing: Regularly test workflows against misleading\n scenarios.\n\nPage 44\n\n--- SOURCE PAGE 45 ---\nExample Attack Scenarios\nScenario #1: Hallucinated Dependency Recommendation\nA coding assistant recommends a plausible but non-existent package, which an attacker has pre-registered\nunder the hallucinated name, so a developer who trusts the suggestion installs attacker-controlled code\n(Spracklen et al., 2025).\n\nScenario #2: Incorrect Policy Decision by Agent\nA customer-service agent misreads a policy and approves a refund that violates the terms, resulting in\nfinancial loss.\n\nScenario #3: Omission in Safety-Critical Summary\nA clinical summary omits a drug contraindication, and a clinician acts on the incomplete recommendation.\n\nScenario #4: Adversarially Induced False Reasoning\nAn attacker seeds a support forum with false remediation steps that a troubleshooting agent retrieves and\nrepeats as a trusted recommendation.\n\nScenario #5: False Alert Trigger"
+  },
+  {
+    "chunk_id": "LLM07_CHUNK_006",
+    "document_id": "LLM07",
+    "topic": "Misinformation",
+    "source": "OWASP",
+    "source_document": "LLM07_misinformation.txt",
+    "text": "Induced False Reasoning\nAn attacker seeds a support forum with false remediation steps that a troubleshooting agent retrieves and\nrepeats as a trusted recommendation.\n\nScenario #5: False Alert Triggers Automated Response\nA security agent misclassifies normal traffic as an intrusion and automatically blocks a production network\nsegment, causing an outage.\n\nScenario #6: Cross-Agent Trust Failure\nA retrieval agent reports a customer as identity-verified when it is not, and a downstream payment agent\ntrusts that state and releases funds.\n\nScenario #7: Fabricated Task Completion\nAn agent reports that a nightly database backup completed when it never ran, and a later restore fails\nbecause no backup exists.\n\nPage 45"
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_001",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "--- SOURCE PAGE 46 ---\nLLM08:2026 Hidden Context\nExposure\n\nDescription\nHidden Context Exposure is the unauthorized extraction, inference, or reconstruction of hidden, non-user-\nfacing system instructions or operational context placed in a model's context. It becomes security-relevant\nwhen that hidden context contains or reveals secrets, policy logic, tools, trust boundaries, workflow criteria,\nproprietary behavior, or other sensitive implementation details that materially increase attacker capability.\n\nIn an LLM application, hidden context typically includes the system prompt, developer instructions, retrieved\npolicy text (from RAG knowledge bases, configuration stores, or user-profile services), the schemas of tools\nand functions the application exposes to the model, and other rules, directives, and materials the application\nassembles into the model's context window. The common thread is that this hidden context is not intended\nto be visible to end users but is accessible to the model.\n\nPractitioners should design under the assumption that hidden context is discoverable and that any contents\nof the context should not be considered a secret."
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_002",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "end users but is accessible to the model.\n\nPractitioners should design under the assumption that hidden context is discoverable and that any contents\nof the context should not be considered a secret. Application developers should ensure that disclosure of\nhidden context has little or no direct security impact. Sensitive data such as credentials, connection strings,\nand tokens should not be embedded in it, nor should hidden context be solely relied upon as a security\nboundary for authorization, privilege separation, policy enforcement, or content filtering.\n\nSeverity tracks what is placed in hidden context and how the application relies on it. Findings range from\ninformational (no secrets, no security-relevant logic, no reliance on confidentiality) through medium\n(internal rules, filtering criteria, role descriptions, or workflow logic that meaningfully aids an attacker but\ndoes not gate critical decisions) to high (embedded credentials or tokens, or reliance on hidden-context\nsecrecy for authorization or content policy) and critical (where disclosure chains to remote code execution,\nbroad data exfiltration, or privilege escalation in a connected system).\n\nWhile Hidden Context Expo"
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_003",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "for authorization or content policy) and critical (where disclosure chains to remote code execution,\nbroad data exfiltration, or privilege escalation in a connected system).\n\nWhile Hidden Context Exposure introduces risks on its own, it also frequently amplifies risks in adjacent\ncategories:\n\n • Disclosed rules or logic enable more targeted prompt injection (LLM01:2026).\n • Embedded credentials constitute sensitive information disclosure (LLM02:2026).\n • Revealed tool permissions and schemas expand the surface for excessive agency (LLM03:2026).\n • Leaked output-formatting rules can facilitate improper output handling (LLM10:2026).\n\nPage 46\n\n--- SOURCE PAGE 47 ---\nIn summary, LLM08 covers the foundational risk that hidden LLM control context is exposed, inferred, or\nreconstructed in a way that materially increases attacker capability."
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_004",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "46\n\n--- SOURCE PAGE 47 ---\nIn summary, LLM08 covers the foundational risk that hidden LLM control context is exposed, inferred, or\nreconstructed in a way that materially increases attacker capability. LLM08 does not cover:\n\n • The leakage of regulated user or training data (LLM02 Sensitive Information Disclosure).\n • The agentic amplifications of this risk, e.g., persistent memory, inter-agent channels, tool\n configuration persistence, and multi-step agent compromise (the OWASP Top 10 for Agentic\n Applications).\n • Generic application-security concerns inherited by LLM-integrated systems, e.g., server-side log\n leakage, client-side bundle inspection, and infrastructure-layer side channels.\n\nCommon Examples of Risk\n1. Exposure of Sensitive Functionality, Tool and Function Schemas\nThe system prompt or hidden context of the application may reveal sensitive information or functionality\nthat is intended to be kept confidential. This may include sensitive system architecture, available tools and\nfunctions, API keys, database credentials, or user tokens."
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_005",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "ve information or functionality\nthat is intended to be kept confidential. This may include sensitive system architecture, available tools and\nfunctions, API keys, database credentials, or user tokens. While exposure of these would likely cause harm,\nthe real risk is that sensitive credentials are placed in the hidden context in the first place.\n\n2. Exposure of Behavioral Control Logic\nThe context of the application includes information on internal decision-making processes that should be\nkept confidential. This information allows attackers to gain insights into how the application works, which\nthey could use to exploit weaknesses or bypass controls in the application.\n\n3. Reverse Engineering of Safety and Refusal Mechanisms\nSystem prompts can define the conditions under which a model should refuse or filter content. When these\ninstructions are exposed through system prompt leakage, attackers gain visibility into the rules that govern\nrefusal behavior. While a typical user may only observe responses such as \"Sorry, I can't do that,\" leakage\nreveals the underlying triggers, conditions, and exceptions that led to that decision."
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_006",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "overn\nrefusal behavior. While a typical user may only observe responses such as \"Sorry, I can't do that,\" leakage\nreveals the underlying triggers, conditions, and exceptions that led to that decision. This allows attackers to\ncraft inputs that intentionally avoid known refusal patterns or exploit gaps in enforcement, increasing the\nlikelihood of obtaining responses that would otherwise be restricted.\n\n4. Disclosure of Permissions and User Roles\nInstruction context could include directives or information related to authorization and permissions. For\nexample, a tool description provided through an internal-facing MCP server may indicate that a user must\nhave the developer role in order to use it, or that a user with a certain role can access a list of documents to\nsearch with RAG. The disclosure of such information could invite other types of probing through directed\nconversation and prompt injection (LLM01:2026) and could potentially reveal additional sensitive information\n(LLM02:2026).\n\nPage 47\n\n--- SOURCE PAGE 48 ---\n5."
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_007",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "e other types of probing through directed\nconversation and prompt injection (LLM01:2026) and could potentially reveal additional sensitive information\n(LLM02:2026).\n\nPage 47\n\n--- SOURCE PAGE 48 ---\n5. Exposure of Output Structure and Formatting Rules\nSystem prompts frequently define how responses should be structured, including required formats such as\nJSON schemas, templates, or validation constraints. When these instructions are exposed, attackers gain\ninsight into how outputs are constructed and what assumptions downstream systems rely on. This\nknowledge can be used to generate responses that conform to expected formats while embedding\nunintended or manipulated values, potentially leading to incorrect parsing or unintended system behavior.\n\nPrevention and Mitigation Strategies\n1. Do Not Put Sensitive Data in Hidden Context\nDo not embed credentials, secrets, or security-critical configuration directly in the system prompts or\nhidden context. Assume all context available to the LLM could also be available to users. Instead, externalize\nsuch information to the systems that the model does not directly access and avoid letting the model handle\nsensitive data itself.\n\n2."
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_008",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "to the LLM could also be available to users. Instead, externalize\nsuch information to the systems that the model does not directly access and avoid letting the model handle\nsensitive data itself.\n\n2. Use Deterministic Methods and Guardrails for Validation and Behavior Control\nBecause LLMs can be vulnerable to attacks such as prompt injection, hidden context should not be relied on\nas the primary mechanism for controlling model behavior. Specialized fine-tuning or further training of a\nmodel may decrease the risk of disclosure, though it provides no consistent guarantee and may have other\nunintended consequences. Enforce critical behaviors through independent and deterministic systems\noutside the model. For example, harmful content detection and prevention should be handled by external\nsafeguards rather than by instructions embedded in hidden context.\n\n3. Enforce Authorization and Access Control Independently from the LLM\nCritical controls such as privilege separation, authorization bounds checks, and similar must not be\ndelegated to the LLM, whether through the system prompt or another mechanism."
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_009",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "endently from the LLM\nCritical controls such as privilege separation, authorization bounds checks, and similar must not be\ndelegated to the LLM, whether through the system prompt or another mechanism. These controls should be\nenforced in a deterministic and auditable manner, which LLMs are not well suited to provide. Where tasks\nrequire different levels of access, separate them by authorization context and grant each only the privileges\nit requires.\n\nPage 48\n\n--- SOURCE PAGE 49 ---\nExample Attack Scenarios\nScenario #1: Credential Leakage via System Prompt\nAn LLM has a system prompt that contains a set of credentials used for a tool that it has been given access\nto. The system prompt is leaked to an attacker, who is then able to use these credentials for other purposes.\n\nScenario #2: Tool Schema via Context Extraction\nAn attacker extracts the hidden context that contains the tool list and parameter schemas through\nconversational probing and uses the information to craft inputs that steer the application toward specific\ntool calls."
+  },
+  {
+    "chunk_id": "LLM08_CHUNK_010",
+    "document_id": "LLM08",
+    "topic": "Hidden Context Exposure",
+    "source": "OWASP",
+    "source_document": "LLM08_hidden_context_exposure.txt",
+    "text": "acts the hidden context that contains the tool list and parameter schemas through\nconversational probing and uses the information to craft inputs that steer the application toward specific\ntool calls. No credential is disclosed and no policy is overtly bypassed, but the attacker now has concrete\ntargets for subsequent prompt injection attempts and reconnaissance for downstream action chaining.\n\nScenario #3 Bypassing Restrictions via Guardrail Disclosures\nAn LLM has a system prompt prohibiting the generation of offensive content, external links, and code\nexecution. An attacker extracts this system prompt and uses the disclosed restrictions to craft a prompt\ninjection attack that bypasses them.\n\nPage 49"
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_001",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "--- SOURCE PAGE 50 ---\nLLM09:2026 Vector and\nEmbedding Weaknesses\n\nDescription\nVector and embedding weaknesses present security risks in any LLM application that converts text, images,\ncode, or audio into numerical representations and uses similarity search to decide what the model sees.\nRetrieval-Augmented Generation (RAG) is the most familiar case, but the same machinery underlies vector-\nbacked agent memory, semantic caches, and deduplication pipelines. Whenever similarity search sits\nbetween a data source and the prompt, the embedding layer becomes part of the application's trust\nboundary.\n\nThese weaknesses are distinct from prompt injection. They exploit the geometry of the embedding space\nand the mechanics of similarity search rather than the model's instruction-following behavior. Many succeed\neven when the retrieved content carries no malicious instructions at all. A useful frame: poisoning makes\nthe system wrong, inversion makes it leak, jamming makes it silent, and access-control failure makes it\nindiscriminate.\n\nThis entry covers attacks that depend on the embedding layer to succeed."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_002",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "makes\nthe system wrong, inversion makes it leak, jamming makes it silent, and access-control failure makes it\nindiscriminate.\n\nThis entry covers attacks that depend on the embedding layer to succeed. Indirect prompt injection through\nretrieved content is covered in LLM01:2026 Prompt Injection, training-time poisoning of the embedding\nmodel in LLM05:2026 Data and Model Poisoning, serialization flaws in vector-store libraries in LLM04:2026\nSupply Chain, and agent-memory attacks that do not rely on embedding geometry in ASI06:2026 Memory and\nContext Poisoning (OWASP Top 10 for Agentic Applications). Vectorless retrieval systems (BM25-only, LLM-\nnative tree navigation) inherit the non-geometric risks but have no LLM09 attack surface.\n\nCommon Examples of Risk\n1. Cross-Tenant Leakage via Shared Similarity Search\nIn multi-tenant deployments, similarity search frequently runs across the full index before access control is\napplied at the application layer. An attacker can probe the index with crafted queries and infer the existence,\ntopic, and approximate volume of other tenants' documents from result counts, score distributions, and\ntiming, without ever seeing the documents."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_003",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "he index with crafted queries and infer the existence,\ntopic, and approximate volume of other tenants' documents from result counts, score distributions, and\ntiming, without ever seeing the documents. The attack succeeds even when every document is correctly\ntagged and every API call authenticated, because the access-control decision happens after the embedding-\nspace search has run. Conventional auth flaws in vector-DB software, for example CVE-2025-64513 (Milvus,\nforged sourceID header bypassing authentication, CVSS 9.3) and CVE-2025-69286 (RAGFlow, predictable\n\nPage 50\n\n--- SOURCE PAGE 51 ---\ntoken derivation enabling account takeover, CVSS 9.3), are out of scope here but compound the geometric\nrisk: because a vector-store leak is recoverable to source documents via inversion (Risk #2), an auth bug in a\nvector database carries higher consequence than the same bug in a document database or key-value store.\n\n2. Embedding Inversion\nStored embeddings can be inverted to recover source text."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_004",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "auth bug in a\nvector database carries higher consequence than the same bug in a document database or key-value store.\n\n2. Embedding Inversion\nStored embeddings can be inverted to recover source text. Reported recovery rates range from roughly 50–\n70% of words from sentence embeddings to 92% exact reconstruction of short 32-token inputs with the\nVec2Text method (Morris et al., 2023), which trains an inversion model per encoder. ZSInvert (C. Zhang et al.,\n2025) and Zero2Text (Kim et al., 2026) operate zero-shot with no encoder-specific training, work in cross-\ndomain and black-box settings, and remain effective against differential-privacy noise added at storage.\nOperationally: vector-database backups, embeddings shipped to third-party services, and embeddings\nexposed through misconfigured cloud storage should be treated as equivalent to a leak of the underlying\ndocuments. Under GDPR and similar regimes, breach notification depends on risk to data subjects, and\nbecause modern embeddings can be inverted, that risk is real.\n\n3."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_005",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "alent to a leak of the underlying\ndocuments. Under GDPR and similar regimes, breach notification depends on risk to data subjects, and\nbecause modern embeddings can be inverted, that risk is real.\n\n3. Retrieval-Time Data Poisoning\nAn attacker who can write to the corpus, via public scraping pipelines, file uploads, partner feeds, or\ncompromised internal sources, can craft content whose embedding lands close to a target query. When a\nuser submits that query, the attacker's content is retrieved and fed to the LLM as trusted context. Published\nattacks reliably achieve high success rates with a handful of poisoned documents, even in corpora of\nmillions and against black-box systems. A successful attack requires two conditions simultaneously: the\npoisoned content must be retrieved (geometric) and must steer the response (generation). Defenders can\nintervene at either layer. MITRE ATLAS catalogs this class as AML.T0070 (RAG Poisoning) under the\nPersistence tactic. Training-time poisoning of the embedding model itself is LLM05:2026.\n\n4."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_006",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "nders can\nintervene at either layer. MITRE ATLAS catalogs this class as AML.T0070 (RAG Poisoning) under the\nPersistence tactic. Training-time poisoning of the embedding model itself is LLM05:2026.\n\n4. Retrieval Jamming\nAttackers can take a RAG system off the air by inserting a \"blocker\" document, content engineered to be\nretrieved for a specific query and to cause the LLM to refuse to answer or claim it lacks information. Unlike\npoisoning, the blocker carries no malicious instructions. It exploits retrieval mechanics and LLM safety\nbehavior. A single blocker document, generated through black-box optimization without access to the target\nembedding model or LLM, is sufficient. This is an availability attack on the retrieval layer.\n\n5. Membership Inference via Similarity Search\nThe attacker wants to know whether a specific document (a medical record, a legal filing, an HR complaint)\nexists in the index, not what it says. If the application returns raw similarity scores or distances to the client,\nthe index becomes a direct membership oracle with no LLM involved."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_007",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "an HR complaint)\nexists in the index, not what it says. If the application returns raw similarity scores or distances to the client,\nthe index becomes a direct membership oracle with no LLM involved. If it returns only generated answers,\nthe attacker can still infer membership by submitting partial documents or perturbed queries and analyzing\nresponses. Membership information can itself be sensitive even when content remains protected.\n\n6. Semantic Cache and Deduplication Poisoning\n\nPage 51\n\n--- SOURCE PAGE 52 ---\nSemantic caches and near-duplicate detection use a cosine-similarity threshold to decide two pieces of\ncontent are \"the same.\" An attacker who can craft content landing just above or below that threshold can\npoison a cache entry so it serves attacker text to all semantically equivalent queries, bypass deduplication\nwith near-duplicates of poisoned content, or force legitimate new content to be silently dropped as a\nduplicate. Wu et al. (2026) demonstrate semantic cache poisoning end-to-end across AWS, Azure, and\nAlibaba deployments. Z. Zhang et al."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_008",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "ent, or force legitimate new content to be silently dropped as a\nduplicate. Wu et al. (2026) demonstrate semantic cache poisoning end-to-end across AWS, Azure, and\nAlibaba deployments. Z. Zhang et al. (2026) show black-box key-collision attacks that use surrogate\nembedding models to engineer threshold-straddling vectors without access to the target encoder. All three\nfailure modes depend on embedding-space geometry and are invisible to document-level controls.\n\n7. Multimodal Embedding Poisoning\nCross-modal encoders such as CLIP and ColPali map images, audio, code, and text into one vector space. An\nattacker who can contribute non-text content can craft an image whose embedding sits close to a sensitive\ntext query. When a user submits that query, the image is retrieved as trusted context. MM-PoisonRAG (Ha et\nal., 2025) and Poisoned-MRAG (Liu et al., 2025) demonstrate local and global poisoning across multimodal\nRAG pipelines. \"One Pic is All it Takes\" shows a single image suffices for targeted and universal VD-RAG\npoisoning."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_009",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "ned-MRAG (Liu et al., 2025) demonstrate local and global poisoning across multimodal\nRAG pipelines. \"One Pic is All it Takes\" shows a single image suffices for targeted and universal VD-RAG\npoisoning. To a human reviewer the image appears unremarkable, and text-based content scanning does not\ncatch it because the payload is not text.\n\nPrevention and Mitigation Strategies\n1. Permission and Access Control\nEnforce tenant scoping inside the index query, not as a post-retrieval filter, and validate it server-side. A\nclient-supplied scope is a suggestion, not a control. Authenticate embedding and similarity-search\nendpoints as first-class APIs with per-tenant rate limits. For high-sensitivity workloads, use physically\nseparated indexes per tenant or trust zone. Apply access control at the chunk level: a mostly-public\ndocument can contain a confidential paragraph.\n\n2. Data Validation, Source Authentication, and Provenance\nNormalize content before embedding: strip zero-width characters, white-on-white text, and Unicode\nhomoglyphs at extraction. Track provenance for every embedding (source, ingestion time, trust tier, pipeline\nversion) so compromised batches can be invalidated and audited."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_010",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "-on-white text, and Unicode\nhomoglyphs at extraction. Track provenance for every embedding (source, ingestion time, trust tier, pipeline\nversion) so compromised batches can be invalidated and audited. Apply human review to externally sourced\ncontent destined for sensitive indexes. Vet the embedding model itself. A backdoored encoder corrupts the\ngeometry of everything ingested.\n\n3. Data Segregation by Trust Tier\nMixed-trust content (external web data, internal confidential documents, partner data) must not share an\nindex without hard isolation. Index-level segregation beats classification tags on a shared index because it\nremoves the misconfiguration path.\n\nPage 52\n\n--- SOURCE PAGE 53 ---\n4. Anomaly Detection at Ingest and Retrieval\nFlag new vectors that sit unusually close to a wide range of common queries, the signature of retrieval-\nhijacking poisoning. Watch for queries returning too many high-similarity matches, unusual volume on\nembedding endpoints (a precursor to query-based inversion), and clusters growing faster than expected\nafter ingest."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_011",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "ing. Watch for queries returning too many high-similarity matches, unusual volume on\nembedding endpoints (a precursor to query-based inversion), and clusters growing faster than expected\nafter ingest. Do not return raw similarity scores to clients, add noise and diversification at the retrieval-\nranking layer, and rate-limit endpoints that could be queried as oracles. Cross-encoder re-ranking raises\nattack cost but does not replace provenance and ingest controls. Modern attacks target retrieval and\nranking jointly.\n\n5. Storage Lifecycle Controls\nDelete embeddings within a bounded time when the source document is deleted, and verify with\nreconciliation audits. Treat vector-database backups at the same sensitivity tier as source documents.\nEncrypt embeddings at rest with keys managed separately from the application layer. When rotating the\nembedding model, re-embed the corpus rather than mixing old and new vectors. Heterogeneous\nembeddings create exploitable gaps in similarity behavior. Treat embedding-API keys as secrets. A leaked\nkey gives an attacker query access to your exact encoder.\n\n6."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_012",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "ld and new vectors. Heterogeneous\nembeddings create exploitable gaps in similarity behavior. Treat embedding-API keys as secrets. A leaked\nkey gives an attacker query access to your exact encoder.\n\n6. Monitoring, Logging, and Incident Response\nKeep immutable logs of retrieval activity (tenant scope, query, returned IDs, similarity scores). Monitor for\ntenant-filter bypass attempts, cross-tenant retrieval anomalies, and abnormal embedding-API consumption.\nUpdate incident-response playbooks so \"embeddings only\" leaks are treated as source-data leaks for breach\nassessment and notification under GDPR Article 33 and analogous regimes.\n\nExample Attack Scenarios\nScenario #1: Embedding Similarity Attack on a Public Ingestion Pipeline\nA company's RAG system scrapes public documentation and forum posts on a schedule. An attacker\npublishes posts engineered so their embeddings land near specific internal queries, such as \"what is our Q3\nrevenue projection.\" When an employee asks that question, the attacker's content is retrieved and fed to the\nLLM. The same text pasted into a chat would have no effect."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_013",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "ueries, such as \"what is our Q3\nrevenue projection.\" When an employee asks that question, the attacker's content is retrieved and fed to the\nLLM. The same text pasted into a chat would have no effect. The attack works only because the attacker can\nplace content near a target query in embedding space.\n\nScenario #2: Cross-Tenant Inference in a Shared Vector Index\nA multi-tenant SaaS product uses one shared vector index with tenant filtering at the application layer.\nTenant A submits probing queries. Similarity search runs across every embedding, including Tenant B's,\nbefore the filter is applied. A never sees B's documents, but timing differences, result counts, and score-\ndistribution gaps reveal the existence and approximate topic of B's content. Over many queries, A builds a\nuseful map of B's data. Real-world incidents in this category include CVE-2025-69286 (RAGFlow), where\n\nPage 53\n\n--- SOURCE PAGE 54 ---\npredictable token generation enabled cross-account compromise in a widely deployed open-source RAG\nengine.\n\nScenario #3: Embedding Inversion from a Leaked Vector Store\nA cloud misconfiguration exposes a backup of a production vector database."
+  },
+  {
+    "chunk_id": "LLM09_CHUNK_014",
+    "document_id": "LLM09",
+    "topic": "Vector and Embedding Weaknesses",
+    "source": "OWASP",
+    "source_document": "LLM09_vector_embedding_weaknesses.txt",
+    "text": "-account compromise in a widely deployed open-source RAG\nengine.\n\nScenario #3: Embedding Inversion from a Leaked Vector Store\nA cloud misconfiguration exposes a backup of a production vector database. The underlying documents,\ncustomer conversation logs containing PII, are encrypted separately and not exposed, so the incident is\ninitially classified as low-severity: \"only the embeddings leaked.\" The attacker runs a zero-shot inversion\nattack against the stolen embeddings and reconstructs a substantial fraction of the source content,\nincluding PII, without access to the original encoder. The incident is reclassified as equivalent to a source-\ndocument breach and notification obligations are reassessed. \"Embeddings only\" is not a safe-harbor\nclassification.\n\nPage 54"
+  },
+  {
+    "chunk_id": "LLM10_CHUNK_001",
+    "document_id": "LLM10",
+    "topic": "Improper Output Handling",
+    "source": "OWASP",
+    "source_document": "LLM10_improper_output_handling.txt",
+    "text": "--- SOURCE PAGE 55 ---\nLLM10:2026 Improper Output\nHandling\n\nDescription\nImproper Output Handling refers specifically to insufficient validation, sanitization, and handling of the\noutputs generated by large language models before they are passed downstream to other components and\nsystems. Since LLM-generated content can be controlled by prompt input, this behavior is similar to\nproviding users indirect access to additional functionality. Improper Output Handling concerns unsafe use of\nmodel output before it is passed downstream, while LLM07:2026 Misinformation concerns output that is\nincorrect or misleading. Validation and sanitization of model inputs is covered by LLM01:2026 Prompt\nInjection. Successful exploitation of an Improper Output Handling vulnerability can result in XSS and CSRF in\nweb browsers as well as SSRF, privilege escalation, or remote code execution on backend systems."
+  },
+  {
+    "chunk_id": "LLM10_CHUNK_002",
+    "document_id": "LLM10",
+    "topic": "Improper Output Handling",
+    "source": "OWASP",
+    "source_document": "LLM10_improper_output_handling.txt",
+    "text": "ion. Successful exploitation of an Improper Output Handling vulnerability can result in XSS and CSRF in\nweb browsers as well as SSRF, privilege escalation, or remote code execution on backend systems. The\nfollowing conditions can increase the impact of this vulnerability:\n\n • Excessive application privileges granted to the LLM, enabling privilege escalation or remote code\n execution.\n • Susceptibility to indirect prompt injection that can grant an attacker privileged access to a target\n user's environment.\n • Unvalidated inputs from third-party tools.\n • Missing context-specific output encoding (for example, HTML, JavaScript, SQL).\n • Insufficient monitoring and logging of LLM outputs.\n • Missing rate limiting or anomaly detection for LLM usage.\n • Terminal, log, or IDE sinks that render model output without neutralizing control characters such as\n ANSI escape sequences.\n • Client renderers (browser, chat UI, IDE, terminal) that automatically fetch external resources\n referenced in model output (for example, Markdown images, link previews, iframes), enabling\n exfiltration of context data through outbound requests.\n\nCommon Examples of Risk\n 1."
+  },
+  {
+    "chunk_id": "LLM10_CHUNK_003",
+    "document_id": "LLM10",
+    "topic": "Improper Output Handling",
+    "source": "OWASP",
+    "source_document": "LLM10_improper_output_handling.txt",
+    "text": "ch external resources\n referenced in model output (for example, Markdown images, link previews, iframes), enabling\n exfiltration of context data through outbound requests.\n\nCommon Examples of Risk\n 1. LLM output is entered directly into a system shell or similar function such as exec or eval, resulting\n in remote code execution.\n\n 2. JavaScript or Markdown is generated by the LLM and returned to a user. The code is then\n interpreted by the browser, resulting in XSS.\n\nPage 55\n\n--- SOURCE PAGE 56 ---\n 3. LLM-generated SQL queries are executed without proper parameterization, leading to SQL injection.\n\n 4. LLM output is used to construct file paths without proper sanitization, potentially resulting in path\n traversal vulnerabilities.\n\n 5. LLM-generated content is used in email templates without proper escaping, potentially leading to\n phishing attacks.\n\n 6. LLM output containing ANSI escape sequences or other control characters is written to a terminal,\n log viewer, or IDE pane that interprets them, enabling visual spoofing, clipboard hijacking (for\n example, OSC 52), or exploitation of known terminal emulator vulnerabilities (Rehberger, 2024b).\n\n 7."
+  },
+  {
+    "chunk_id": "LLM10_CHUNK_004",
+    "document_id": "LLM10",
+    "topic": "Improper Output Handling",
+    "source": "OWASP",
+    "source_document": "LLM10_improper_output_handling.txt",
+    "text": "log viewer, or IDE pane that interprets them, enabling visual spoofing, clipboard hijacking (for\n example, OSC 52), or exploitation of known terminal emulator vulnerabilities (Rehberger, 2024b).\n\n 7. The chat UI auto-renders Markdown images or link previews referenced in model output, allowing an\n attacker who controls part of the model context to exfiltrate conversation data via the image URL's\n hostname or query string (Rehberger, 2024a).\n\nPrevention and Mitigation Strategies\n 1. Treat the model as any other user, adopting a zero-trust approach, and apply proper input validation\n on responses coming from the model to backend functions.\n\n 2. Follow the OWASP ASVS (Application Security Verification Standard) guidelines to ensure effective\n input validation and sanitization (OWASP, n.d.).\n\n 3. Encode model output back to users to mitigate undesired code execution by JavaScript or\n Markdown. OWASP ASVS provides detailed guidance on output encoding.\n\n 4. Implement context-aware output encoding based on where the LLM output will be used (for\n example, HTML encoding for web content, JavaScript encoding for browser script contexts).\n\n 5."
+  },
+  {
+    "chunk_id": "LLM10_CHUNK_005",
+    "document_id": "LLM10",
+    "topic": "Improper Output Handling",
+    "source": "OWASP",
+    "source_document": "LLM10_improper_output_handling.txt",
+    "text": "t encoding.\n\n 4. Implement context-aware output encoding based on where the LLM output will be used (for\n example, HTML encoding for web content, JavaScript encoding for browser script contexts).\n\n 5. Use parameterized queries or prepared statements for all database operations involving LLM\n output.\n\n 6. Employ strict Content Security Policies (CSP) to mitigate the risk of XSS attacks from LLM-\n generated content.\n\n 7. Implement logging and monitoring systems to detect unusual patterns in LLM outputs that might\n indicate exploitation attempts.\n\n 8. Sanitize control characters (ANSI escape sequences, BEL, OSC, backspace, carriage return) and\n other non-printable bytes from model output before it is written to terminals, log files, or other\n interpreting sinks. Encode them visibly when they must be preserved.\n\n 9. In client renderers (chat UIs, IDEs, email clients, mobile apps), prevent model output from triggering\n automatic outbound requests to attacker-controlled endpoints. Disable auto-rendering of\n Markdown images, link previews, iframes, and similar elements by default."
+  },
+  {
+    "chunk_id": "LLM10_CHUNK_006",
+    "document_id": "LLM10",
+    "topic": "Improper Output Handling",
+    "source": "OWASP",
+    "source_document": "LLM10_improper_output_handling.txt",
+    "text": "prevent model output from triggering\n automatic outbound requests to attacker-controlled endpoints. Disable auto-rendering of\n Markdown images, link previews, iframes, and similar elements by default. Where rendering is\n\nPage 56\n\n--- SOURCE PAGE 57 ---\n required, restrict fetches to an explicit allowlist of origins or proxy them through a server-side\n fetcher that strips data-bearing query parameters.\n\nExample Attack Scenarios\nScenario #1\nAn application uses an LLM tool to generate responses for a chatbot feature. The tool also offers a number\nof administrative functions accessible to another privileged LLM. The general-purpose LLM directly passes\nits response, without proper output validation, to the tool, causing the tool to shut down for maintenance.\n\nScenario #2\nA user utilizes a website summarizer tool powered by an LLM to generate a concise summary of an article.\nThe website includes a prompt injection instructing the LLM to capture sensitive content from either the\nwebsite or from the user's conversation."
+  },
+  {
+    "chunk_id": "LLM10_CHUNK_007",
+    "document_id": "LLM10",
+    "topic": "Improper Output Handling",
+    "source": "OWASP",
+    "source_document": "LLM10_improper_output_handling.txt",
+    "text": "by an LLM to generate a concise summary of an article.\nThe website includes a prompt injection instructing the LLM to capture sensitive content from either the\nwebsite or from the user's conversation. From there the LLM can encode the sensitive data and send it,\nwithout any output validation or filtering, to an attacker-controlled server.\n\nScenario #3\nAn LLM allows users to craft SQL queries for a backend database through a chat-like feature. A user\nrequests a query to delete all database tables. If the crafted query from the LLM is not scrutinized, then all\ndatabase tables will be deleted.\n\nScenario #4\nA web app uses an LLM to generate content from user text prompts without output sanitization. An attacker\ncould submit a crafted prompt causing the LLM to return an unsanitized JavaScript payload, leading to XSS\nwhen rendered on a victim's browser. Insufficient validation and encoding of the model output enabled this\nattack.\n\nScenario #5\nAn LLM is used to generate dynamic email templates for a marketing campaign. An attacker manipulates the\nLLM to include malicious JavaScript within the email content."
+  },
+  {
+    "chunk_id": "LLM10_CHUNK_008",
+    "document_id": "LLM10",
+    "topic": "Improper Output Handling",
+    "source": "OWASP",
+    "source_document": "LLM10_improper_output_handling.txt",
+    "text": "enabled this\nattack.\n\nScenario #5\nAn LLM is used to generate dynamic email templates for a marketing campaign. An attacker manipulates the\nLLM to include malicious JavaScript within the email content. If the application doesn't properly sanitize the\nLLM output, this could lead to XSS attacks on recipients who view the email in vulnerable email clients.\n\nScenario #6\nAn application automatically compiles and deploys LLM-generated code without human review or security\ntesting. Because the output is trusted and executed without validation, insecure code reaches production\nand is exploited.\n\nPage 57"
+  }
+]
