@@ -4,7 +4,7 @@ An agentic retrieval-augmented generation (RAG) system for answering generative 
 
 ## Main Notebook
 
-[`agentic_research_and_knowledge_investigation.ipynb`](agentic_research_and_knowledge_investigation.ipynb) contains the implementation, demonstrations, and evaluation. Upload the notebook to the repository root with this filename so the link works.
+[`agentic_retrieval.ipynb`](agentic_retrieval.ipynb) contains the implementation, demonstrations, and evaluation. Upload the notebook to the repository root with this filename so the link works.
 
 ## Features
 
