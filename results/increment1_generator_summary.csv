@@ -1,7 +1,7 @@
 version,question_type,questions,expected_coverage,all_expected_found,reference_overlap,avg_rounds
-A: Gemini single search,factoid,4,1.0,1.0,0.75,1.0
-A: Gemini single search,narrative,6,0.83,0.67,0.6,1.0
-B: Gemini agent,factoid,4,1.0,1.0,0.75,1.75
-B: Gemini agent,narrative,6,0.92,0.83,0.71,1.17
-H: FLAN-T5 single search,factoid,4,1.0,1.0,0.08,1.0
-H: FLAN-T5 single search,narrative,6,0.67,0.5,0.01,1.0
+A: Gemini single search,factoid,4,1.0,1.0,0.67,1.0
+A: Gemini single search,narrative,6,0.92,0.83,0.7,1.0
+B: Gemini agent,factoid,4,1.0,1.0,0.5,1.0
+B: Gemini agent,narrative,6,1.0,1.0,0.76,1.33
+H: FLAN-T5 single search,factoid,4,1.0,1.0,0.0,1.0
+H: FLAN-T5 single search,narrative,6,0.83,0.67,0.03,1.0
