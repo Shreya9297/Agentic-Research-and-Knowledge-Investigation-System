@@ -1,0 +1,6 @@
+case,question,rounds,stop_reason,answered,insufficient_evidence
+Case 1,What are the common causes of excessive agency in LLM applications?,1,evidence_sufficient,True,False
+Case 2,"How can a prompt injection attack lead to excessive agency, and what m...",3,max_rounds_reached,True,True
+Case 3,Why does OWASP say that unbounded consumption only affects image gener...,2,evidence_sufficient,True,False
+Case 4,What fine does the EU AI Act impose on a company that suffers a prompt...,3,max_rounds_reached,True,True
+Case 5,hi,0,invalid_input,False,

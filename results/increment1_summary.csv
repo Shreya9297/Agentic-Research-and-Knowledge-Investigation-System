@@ -1,0 +1,3 @@
+version,expected_coverage,all_expected_found,citations_valid,abstention_correct,avg_rounds,avg_evidence_chunks
+A: single search,1.0,1.0,0.714,1.0,1.0,4.0
+B: agentic,0.9,0.8,1.0,0.571,2.571,6.857
